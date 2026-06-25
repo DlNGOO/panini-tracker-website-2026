@@ -134,17 +134,8 @@ export default function LoginScreen({
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 relative overflow-hidden" id="login-screen-root">
-      {/* Background Image */}
-      <div 
-        className="fixed inset-0 pointer-events-none opacity-30 z-0" 
-        style={{ 
-          backgroundImage: "url('/background.jpg')", 
-          backgroundSize: 'cover', 
-          backgroundPosition: 'center', 
-          backgroundAttachment: 'fixed',
-          backgroundRepeat: 'no-repeat'
-        }} 
-      />
+      {/* Background Grid */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none" />
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="max-w-md w-full relative z-10 flex flex-col gap-6">

@@ -114,7 +114,7 @@ async function startServer() {
   let cloudSyncTimeout: NodeJS.Timeout | null = null;
 
   // Helper to save database
-  function saveDb(data: Record<string, any>) {
+  function saveDb(data: Record<string, any>, immediate: boolean = false) {
     memoryDb = data;
     // Local backup
     try {
@@ -123,10 +123,9 @@ async function startServer() {
       console.error("Error saving local db file:", err);
     }
     
-    // Cloud sync (debounced to avoid rate limits)
+    // Cloud sync
     if (process.env.JSONBIN_BIN_ID && process.env.JSONBIN_API_KEY) {
-      if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
-      cloudSyncTimeout = setTimeout(() => {
+      const syncCloud = () => {
         fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}`, {
           method: 'PUT',
           headers: {
@@ -135,7 +134,15 @@ async function startServer() {
           },
           body: JSON.stringify(memoryDb)
         }).catch(err => console.error("Cloud DB sync failed:", err));
-      }, 5000); // 5 second debounce
+      };
+
+      if (immediate) {
+        if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
+        syncCloud();
+      } else {
+        if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
+        cloudSyncTimeout = setTimeout(syncCloud, 5000); // 5 second debounce
+      }
     }
   }
 
@@ -165,7 +172,7 @@ async function startServer() {
       groupId: groupId || null
     };
     db[id] = newProfile;
-    saveDb(db);
+    saveDb(db, true);
     res.json({ success: true, profile: newProfile });
   });
 
@@ -245,6 +252,50 @@ async function startServer() {
     res.json(existing);
   });
 
+  // Atomic trade endpoint
+  app.post("/api/groups/trade", (req, res) => {
+    const { userAId, userBId, userAGives, userBGives } = req.body;
+    if (!userAId || !userBId || !userAGives || !userBGives) {
+      return res.status(400).json({ error: "Fehlende Parameter für den Tausch." });
+    }
+
+    const db = getDb();
+    const uA = db[userAId.toLowerCase()];
+    const uB = db[userBId.toLowerCase()];
+    
+    if (!uA || !uB) {
+      return res.status(404).json({ error: "Benutzer nicht gefunden." });
+    }
+
+    // A gives away duplicates
+    for (const code of userAGives) {
+      const val = uA.duplicates[code] || 0;
+      if (val <= 1) delete uA.duplicates[code];
+      else uA.duplicates[code] = val - 1;
+      
+      // B receives stickers
+      if (!uB.owned.includes(code)) uB.owned.push(code);
+    }
+
+    // B gives away duplicates
+    for (const code of userBGives) {
+      const val = uB.duplicates[code] || 0;
+      if (val <= 1) delete uB.duplicates[code];
+      else uB.duplicates[code] = val - 1;
+      
+      // A receives stickers
+      if (!uA.owned.includes(code)) uA.owned.push(code);
+    }
+
+    db[userAId.toLowerCase()] = uA;
+    db[userBId.toLowerCase()] = uB;
+    
+    // Save immediately and skip debounce to ensure trade is safely in cloud
+    saveDb(db, true);
+    
+    res.json({ success: true, profileA: uA, profileB: uB });
+  });
+
   // Create a new group
   app.post("/api/groups/create", (req, res) => {
     const { name, avatar, userId } = req.body;
@@ -269,7 +320,7 @@ async function startServer() {
     db["_groups"][groupId] = newGroup;
     db[userId].groupId = groupId;
 
-    saveDb(db);
+    saveDb(db, true);
     res.json({ success: true, group: newGroup, profile: db[userId] });
   });
 
@@ -318,7 +369,7 @@ async function startServer() {
       db[userId].groupId = group.id;
     }
     
-    saveDb(db);
+    saveDb(db, true);
     res.json({ success: true, group, profile: db[userId] });
   });
 

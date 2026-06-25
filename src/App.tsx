@@ -241,19 +241,14 @@ export default function App() {
       localStorage.setItem(`panini_owned_${userBId}`, JSON.stringify(nextOwnedB));
       localStorage.setItem(`panini_duplicates_${userBId}`, JSON.stringify(nextDuplicatesB));
 
-      // Send update requests sequentially
-      const resA = await fetch(`/api/profiles/${userAId}`, {
+      // Send atomic trade request
+      const res = await fetch("/api/groups/trade", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ owned: nextOwnedA, duplicates: nextDuplicatesA }),
-      });
-      const resB = await fetch(`/api/profiles/${userBId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ owned: nextOwnedB, duplicates: nextDuplicatesB }),
+        body: JSON.stringify({ userAId, userBId, userAGives, userBGives }),
       });
 
-      if (!resA.ok || !resB.ok) {
+      if (!res.ok) {
         throw new Error("Tausch konnte auf dem Server nicht gespeichert werden.");
       }
 
@@ -503,17 +498,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans" id="app-root">
-      {/* Background Image */}
-      <div 
-        className="fixed inset-0 pointer-events-none opacity-30 z-0" 
-        style={{ 
-          backgroundImage: "url('/background.jpg')", 
-          backgroundSize: 'cover', 
-          backgroundPosition: 'center', 
-          backgroundAttachment: 'fixed',
-          backgroundRepeat: 'no-repeat'
-        }} 
-      />
+      {/* Background Grid */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none" />
 
       {/* Global Success Toast */}
       <AnimatePresence>
