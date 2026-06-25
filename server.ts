@@ -37,83 +37,13 @@ async function startServer() {
   const stickerImgPath = path.join(process.cwd(), "panini_sticker_bilder");
   app.use("/stickers", express.static(stickerImgPath));
 
+  let memoryDb: Record<string, any> = {};
+  let cloudSyncEnabled = false;
+
   const dbPath = path.join(process.cwd(), "sticker_db.json");
 
-  // One-time startup database clean-up to remove Benny, Hassan, Oliver, Jonas, and any undefined records
-  try {
-    let db: Record<string, any> = {};
-    if (fs.existsSync(dbPath)) {
-      try {
-        db = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
-      } catch (e) {
-        db = {};
-      }
-    }
-    
-    // Remove only undefined profiles
-    const keysToRemove = ["undefined"];
-    let changed = false;
-    for (const key of keysToRemove) {
-      if (db[key]) {
-        delete db[key];
-        changed = true;
-      }
-    }
-    
-    // Ensure _groups exists
-    if (!db._groups) {
-      db._groups = {};
-      changed = true;
-    }
-
-    if (changed || !db._db_cleared_to_zero) {
-      db._db_cleared_to_zero = true;
-      fs.writeFileSync(dbPath, JSON.stringify(db, null, 2), "utf-8");
-      console.log("Database cleaned of undefined profiles.");
-    }
-  } catch (err) {
-    console.error("Failed to clean database on startup:", err);
-  }
-
-  let memoryDb: Record<string, any> = {};
-
-  // Initialize from local disk
-  if (fs.existsSync(dbPath)) {
-    try {
-      memoryDb = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
-    } catch (e) {
-      console.error("Local DB read error, starting fresh.");
-    }
-  }
-
-  // Attempt to load from JSONBin if credentials are provided
-  if (process.env.JSONBIN_BIN_ID && process.env.JSONBIN_API_KEY) {
-    console.log("JSONBin credentials found. Fetching latest DB from cloud...");
-    try {
-      const res = await fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}/latest`, {
-        headers: { 'X-Master-Key': process.env.JSONBIN_API_KEY }
-      });
-      const data = await res.json();
-      if (data && data.record) {
-        memoryDb = data.record;
-        fs.writeFileSync(dbPath, JSON.stringify(memoryDb, null, 2), "utf-8");
-        console.log("Successfully synchronized DB from JSONBin cloud.");
-      }
-    } catch (err) {
-      console.error("Failed to fetch from JSONBin:", err);
-    }
-  } else {
-    console.log("No JSONBIN_BIN_ID found. Using local file database only.");
-  }
-
-  // Helper to read database
-  function getDb(): Record<string, any> {
-    return memoryDb;
-  }
-
-  let cloudSyncTimeout: NodeJS.Timeout | null = null;
-
   // Helper to save database
+  let cloudSyncTimeout: NodeJS.Timeout | null = null;
   function saveDb(data: Record<string, any>, immediate: boolean = false) {
     memoryDb = data;
     // Local backup
@@ -124,7 +54,7 @@ async function startServer() {
     }
     
     // Cloud sync
-    if (process.env.JSONBIN_BIN_ID && process.env.JSONBIN_API_KEY) {
+    if (cloudSyncEnabled && process.env.JSONBIN_BIN_ID && process.env.JSONBIN_API_KEY) {
       const syncCloud = () => {
         fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}`, {
           method: 'PUT',
@@ -144,6 +74,52 @@ async function startServer() {
         cloudSyncTimeout = setTimeout(syncCloud, 5000); // 5 second debounce
       }
     }
+  }
+
+  // Attempt to load from JSONBin if credentials are provided
+  if (process.env.JSONBIN_BIN_ID && process.env.JSONBIN_API_KEY) {
+    console.log("JSONBin credentials found. Fetching latest DB from cloud...");
+    try {
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}/latest`, {
+        headers: { 'X-Master-Key': process.env.JSONBIN_API_KEY }
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data && data.record) {
+        memoryDb = data.record;
+        fs.writeFileSync(dbPath, JSON.stringify(memoryDb, null, 2), "utf-8");
+        console.log("Successfully synchronized DB from JSONBin cloud.");
+        cloudSyncEnabled = true; // Only enable saving to cloud if loading succeeded!
+      } else {
+        throw new Error("Invalid JSONBin response structure");
+      }
+    } catch (err) {
+      console.error("CRITICAL ERROR: Failed to fetch from JSONBin. Disabling cloud sync to prevent data loss:", err);
+      // Fallback to local file if available
+      if (fs.existsSync(dbPath)) {
+        try {
+          memoryDb = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
+          console.log("Using local backup instead.");
+        } catch (e) {
+          memoryDb = {};
+        }
+      }
+    }
+  } else {
+    console.log("No JSONBIN_BIN_ID found. Using local file database only.");
+    if (fs.existsSync(dbPath)) {
+      try {
+        memoryDb = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
+      } catch (e) {
+        memoryDb = {};
+      }
+    }
+    // If no JSONBin credentials exist, we can't overwrite it anyway, but we allow local saves
+  }
+
+  // Helper to read database
+  function getDb(): Record<string, any> {
+    return memoryDb;
   }
 
   // --- API ROUTES ---
