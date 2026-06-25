@@ -91,18 +91,19 @@ async function startServer() {
   // Attempt to load from JSONBin if credentials are provided
   if (process.env.JSONBIN_BIN_ID && process.env.JSONBIN_API_KEY) {
     console.log("JSONBin credentials found. Fetching latest DB from cloud...");
-    fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}/latest`, {
-      headers: { 'X-Master-Key': process.env.JSONBIN_API_KEY }
-    })
-    .then(res => res.json())
-    .then(data => {
+    try {
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}/latest`, {
+        headers: { 'X-Master-Key': process.env.JSONBIN_API_KEY }
+      });
+      const data = await res.json();
       if (data && data.record) {
         memoryDb = data.record;
         fs.writeFileSync(dbPath, JSON.stringify(memoryDb, null, 2), "utf-8");
         console.log("Successfully synchronized DB from JSONBin cloud.");
       }
-    })
-    .catch(err => console.error("Failed to fetch from JSONBin:", err));
+    } catch (err) {
+      console.error("Failed to fetch from JSONBin:", err);
+    }
   } else {
     console.log("No JSONBIN_BIN_ID found. Using local file database only.");
   }
