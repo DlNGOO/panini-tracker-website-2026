@@ -65,7 +65,10 @@ async function startServer() {
             },
             body: JSON.stringify(memoryDb)
           });
-          if (!res.ok) console.error("Cloud DB sync failed with HTTP status:", res.status);
+          if (!res.ok) {
+            const errBody = await res.text();
+            console.error(`Cloud DB sync failed with HTTP status: ${res.status}. Response: ${errBody}`);
+          }
         } catch (err) {
           console.error("Cloud DB sync failed (Network):", err);
         }
