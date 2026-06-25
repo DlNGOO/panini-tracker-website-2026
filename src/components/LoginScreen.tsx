@@ -52,15 +52,44 @@ export default function LoginScreen({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setError("Das Bild ist zu groß. Maximale Größe ist 2MB.");
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Das Bild ist zu groß. Maximale Größe ist 5MB.");
         return;
       }
       
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setUploadedAvatar(reader.result as string);
-        setError(null);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const maxSize = 120; // Reduce to max 120px to keep base64 string extremely small (<5KB)
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height) {
+            if (width > maxSize) {
+              height = Math.round((height * maxSize) / width);
+              width = maxSize;
+            }
+          } else {
+            if (height > maxSize) {
+              width = Math.round((width * maxSize) / height);
+              height = maxSize;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            // Compress heavily to avoid JSONBin 100KB limit
+            const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+            setUploadedAvatar(compressedBase64);
+            setError(null);
+          }
+        };
+        img.src = e.target?.result as string;
       };
       reader.onerror = () => {
         setError("Fehler beim Lesen der Datei.");
