@@ -10,15 +10,21 @@ interface NationsProgressTableProps {
   onSelectCountry: (countryKey: string) => void;
 }
 
-// Order of nations exactly as listed in the user's provided Excel/CSV sheet
+// Order of nations exactly as listed in the user's provided Panini book order
 const CSV_NATION_ORDER = [
   "FWC", // Intro & WM-Historie
-  "MEX", "RSA", "KOR", "CZE", "CAN", "BIH", "QAT", "SUI", "BRA",
-  "MAR", "HAI", "SCO", "USA", "PAR", "AUS", "TUR", "GER", "CUW",
-  "CIV", "ECU", "NED", "JPN", "SWE", "TUN", "BEL", "EGY", "IRN",
-  "NZL", "ESP", "CPV", "KSA", "URU", "FRA", "SEN", "IRQ", "NOR",
-  "ARG", "ALG", "AUT", "JOR", "POR", "COD", "UZB", "COL", "ENG",
-  "CRO", "GHA", "PAN"
+  "MEX", "RSA", "KOR", "CZE", // A
+  "CAN", "BIH", "QAT", "SUI", // B
+  "BRA", "MAR", "HAI", "SCO", // C
+  "USA", "PAR", "AUS", "TUR", // D
+  "GER", "CUW", "CIV", "ECU", // E
+  "NED", "JPN", "SWE", "TUN", // F
+  "BEL", "EGY", "IRN", "NZL", // G
+  "ESP", "CPV", "KSA", "URU", // H
+  "FRA", "SEN", "IRQ", "NOR", // I
+  "ARG", "ALG", "AUT", "JOR", // J
+  "POR", "COD", "UZB", "COL", // K
+  "ENG", "CRO", "GHA", "PAN"  // L
 ];
 
 export default function NationsProgressTable({ profile, onSelectCountry }: NationsProgressTableProps) {
