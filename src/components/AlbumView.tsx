@@ -9,6 +9,7 @@ interface AlbumViewProps {
   onUpdateInventory: (owned: string[], duplicates: Record<string, number>) => void;
   selectedCountryKey?: string;
   setSelectedCountryKey?: (key: string) => void;
+  readonly?: boolean;
 }
 
 export default function AlbumView({
@@ -16,6 +17,7 @@ export default function AlbumView({
   onUpdateInventory,
   selectedCountryKey: propSelectedCountryKey,
   setSelectedCountryKey: propSetSelectedCountryKey,
+  readonly = false,
 }: AlbumViewProps) {
   const [localSelectedCountryKey, setLocalSelectedCountryKey] = useState<string>("GER");
   const selectedCountryKey = propSelectedCountryKey || localSelectedCountryKey;
@@ -41,6 +43,7 @@ export default function AlbumView({
 
   // Toggle sticker owned status (add OR remove)
   const toggleOwned = (stickerCode: string) => {
+    if (readonly) return;
     const isOwned = profileOwned.includes(stickerCode);
     let newOwned = [...profileOwned];
     let newDuplicates = { ...profileDuplicates };
@@ -55,6 +58,7 @@ export default function AlbumView({
 
   // Adjust duplicate count
   const adjustDuplicate = (stickerCode: string, amount: number) => {
+    if (readonly) return;
     const newDuplicates = { ...profileDuplicates };
     const current = newDuplicates[stickerCode] || 0;
     const nextVal = current + amount;
@@ -200,10 +204,12 @@ export default function AlbumView({
                   Gruppe {activeCountry.group}
                 </span>
               </div>
-              <p className="text-slate-400 text-xs mt-1">
-                <span className="text-amber-400 font-bold">Doppelklick</span> zum Sammeln / Entfernen ·{" "}
-                <span className="text-indigo-400 font-bold">Klick</span> auf gesammelte Sticker für Großansicht
-              </p>
+              {!readonly && (
+                <p className="text-slate-400 text-xs mt-1">
+                  <span className="text-amber-400 font-bold">Doppelklick</span> zum Sammeln / Entfernen ·{" "}
+                  <span className="text-indigo-400 font-bold">Klick</span> auf gesammelte Sticker für Großansicht
+                </p>
+              )}
             </div>
           </div>
           <div className="flex gap-3">
@@ -268,11 +274,11 @@ export default function AlbumView({
                   owned ? "" : "bg-slate-950/60 hover:border-slate-500 hover:bg-slate-900/40"
                 }`}
                 style={{ aspectRatio: "600 / 835" }}
-                onDoubleClick={() => handleDoubleClick(stickerCode)}
+                onDoubleClick={() => !readonly && handleDoubleClick(stickerCode)}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
                 transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                title={owned ? "Doppelklick zum Entfernen" : "Doppelklicken zum Sammeln"}
+                title={readonly ? undefined : (owned ? "Doppelklick zum Entfernen" : "Doppelklicken zum Sammeln")}
               >
                 {/* Shiny shimmer overlay (Badge/Wappen sticker) */}
                 {owned && shiny && duplicateCount === 0 && (
@@ -313,31 +319,32 @@ export default function AlbumView({
                     </div>
 
                     {/* Bottom duplicate counter strip */}
-                    <div className="absolute bottom-0 inset-x-0 flex items-center justify-between px-1.5 py-1 bg-gradient-to-t from-black/80 via-black/50 to-transparent z-20 ctrl-btn">
-                      <span className="text-[8px] text-white/60 font-semibold uppercase tracking-wide truncate max-w-[50%]">
-                        {duplicateCount > 0 ? `${duplicateCount}x doppelt` : "einmalig"}
-                      </span>
-                      <div className="flex items-center gap-0.5 ctrl-btn">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); adjustDuplicate(stickerCode, -1); }}
-                          className="p-0.5 rounded bg-white/15 hover:bg-white/30 text-white transition-colors ctrl-btn"
-                        >
-                          <Minus className="h-2.5 w-2.5" />
-                        </button>
-                        <span className={`text-[9px] font-bold font-mono px-1 rounded py-0.5 ctrl-btn ${
-                          duplicateCount > 1 ? "bg-red-700/80 text-white" : duplicateCount === 1 ? "bg-rose-400/80 text-white" : "bg-white/10 text-white/50"
-                        }`}>
-                          {duplicateCount}x
+                    {!readonly && (
+                      <div className="absolute bottom-0 inset-x-0 flex items-center justify-between px-1.5 py-1 bg-gradient-to-t from-black/80 via-black/50 to-transparent z-20 ctrl-btn">
+                        <span className="text-[8px] text-white/60 font-semibold uppercase tracking-wide truncate max-w-[50%]">
+                          {duplicateCount > 0 ? `${duplicateCount}x doppelt` : "einmalig"}
                         </span>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); adjustDuplicate(stickerCode, 1); }}
-                          className="p-0.5 rounded bg-white/15 hover:bg-white/30 text-white transition-colors ctrl-btn"
-                        >
-                          <Plus className="h-2.5 w-2.5" />
-                        </button>
+                        <div className="flex items-center gap-0.5 ctrl-btn">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); adjustDuplicate(stickerCode, -1); }}
+                            className="p-0.5 rounded bg-white/15 hover:bg-white/30 text-white transition-colors ctrl-btn"
+                          >
+                            <Minus className="h-2.5 w-2.5" />
+                          </button>
+                          <span className={`text-[9px] font-bold font-mono px-1 rounded py-0.5 ctrl-btn ${
+                            duplicateCount > 1 ? "bg-red-700/80 text-white" : duplicateCount === 1 ? "bg-rose-400/80 text-white" : "bg-white/10 text-white/50"
+                          }`}>
+                            {duplicateCount}x
+                          </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); adjustDuplicate(stickerCode, 1); }}
+                            className="p-0.5 rounded bg-white/15 hover:bg-white/30 text-white transition-colors ctrl-btn"
+                          >
+                            <Plus className="h-2.5 w-2.5" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-
+                    )}
 
                   </>
                 ) : (

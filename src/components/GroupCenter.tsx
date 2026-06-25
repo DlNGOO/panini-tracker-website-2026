@@ -2,9 +2,10 @@ import React, { useState, useEffect } from "react";
 import { UserProfile, GroupDetails, COUNTRIES } from "../types";
 import Avatar from "./Avatar";
 import NotificationBotCenter from "./NotificationBotCenter";
+import AlbumView from "./AlbumView";
 import { 
   Users, Plus, LogIn, Copy, Check, BarChart2, ArrowLeftRight, 
-  MessageSquare, AlertCircle, RefreshCw, Send, ShieldAlert, CheckCircle 
+  MessageSquare, AlertCircle, RefreshCw, Send, ShieldAlert, CheckCircle, BookOpen, X 
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { getStickerName, getCountryFlagUrl } from "../playerData";
@@ -27,6 +28,9 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
   // Navigation tabs inside the active group
   const [activeSubTab, setActiveSubTab] = useState<"stats" | "trades" | "bot">("stats");
   
+  // Album Viewer Modal state
+  const [viewingMemberAlbum, setViewingMemberAlbum] = useState<UserProfile | null>(null);
+
   // Create / Join group states
   const [createName, setCreateName] = useState("");
   const [createAvatar, setCreateAvatar] = useState("⚽");
@@ -509,7 +513,7 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
                     <th className="py-3 px-4">Fortschritt</th>
                     <th className="py-3 px-4 text-center">Einzigartig</th>
                     <th className="py-3 px-4 text-center">Doppelt</th>
-                    <th className="py-3 px-4 text-right">Zuletzt aktiv</th>
+                    <th className="py-3 px-4 text-right">Aktion</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/50">
@@ -564,8 +568,14 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
                         <td className="py-3.5 px-4 text-center font-bold font-mono text-amber-400">
                           {dupCount}
                         </td>
-                        <td className="py-3.5 px-4 text-right text-xs text-slate-500">
-                          Gerade online
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            onClick={() => setViewingMemberAlbum(member)}
+                            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ml-auto"
+                          >
+                            <BookOpen className="h-3 w-3" />
+                            Album anzeigen
+                          </button>
                         </td>
                       </tr>
                     );
@@ -726,6 +736,44 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
           <NotificationBotCenter />
         )}
       </div>
+
+      {/* Album Viewer Modal */}
+      <AnimatePresence>
+        {viewingMemberAlbum && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col bg-slate-950/90 backdrop-blur-sm"
+          >
+            {/* Modal Header */}
+            <div className="bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <Avatar avatar={viewingMemberAlbum.avatar} className="text-2xl" />
+                <div>
+                  <h2 className="text-lg font-bold text-slate-100">Album von {viewingMemberAlbum.name}</h2>
+                  <p className="text-xs text-slate-400">Schreibgeschützter Ansichtsmodus</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingMemberAlbum(null)}
+                className="bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 p-2 rounded-xl transition-colors border border-transparent hover:border-rose-500/30"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6">
+              <AlbumView
+                profile={viewingMemberAlbum}
+                onUpdateInventory={() => {}}
+                readonly={true}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
