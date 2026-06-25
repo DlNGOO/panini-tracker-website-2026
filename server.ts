@@ -249,33 +249,56 @@ async function startServer() {
   // Create a new group
   app.post("/api/groups/create", (req, res) => {
     const { name, avatar, userId } = req.body;
-    if (!name || !userId) {
-      return res.status(400).json({ error: "Gruppenname und Ersteller-ID erforderlich." });
-    }
+    if (!name || !userId) return res.status(400).json({ error: "Missing parameters" });
+
     const db = getDb();
-    if (!db._groups) db._groups = {};
-    
-    const groupId = "g-" + Math.random().toString(36).substring(2, 8);
-    const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-    
+    if (!db[userId]) return res.status(404).json({ error: "User not found" });
+
+    const groupId = "grp_" + Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
+    const inviteCode = Array.from({length: 6}, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".charAt(Math.floor(Math.random() * 36))).join('');
+
     const newGroup = {
       id: groupId,
       name,
-      avatar: avatar || "⚽",
-      inviteCode,
-      createdBy: userId
+      avatar: avatar || "🏆",
+      createdBy: userId,
+      createdAt: new Date().toISOString(),
+      inviteCode
     };
-    
-    db._groups[groupId] = newGroup;
-    
-    // Update user to be in this group
-    if (db[userId]) {
-      db[userId].groupId = groupId;
-    }
-    
+
+    if (!db["_groups"]) db["_groups"] = {};
+    db["_groups"][groupId] = newGroup;
+    db[userId].groupId = groupId;
+
     saveDb(db);
     res.json({ success: true, group: newGroup, profile: db[userId] });
   });
+
+  // --- NOTIFICATION & MAIL BOT ROUTES ---
+
+  app.get("/api/notifications/bot-status", (req, res) => {
+    res.json(getMailBotStatus());
+  });
+
+  app.post("/api/notifications/bot-init", async (req, res) => {
+    const status = await initializeMailBot();
+    res.json(status);
+  });
+
+  app.get("/api/notifications/logs", (req, res) => {
+    const locksDb = getLocksDb();
+    res.json(locksDb.logs || []);
+  });
+
+  app.post("/api/notifications/reset-locks", (req, res) => {
+    const locksDb = getLocksDb();
+    locksDb.locks = {};
+    locksDb.logs = [];
+    saveLocksDb(locksDb);
+    res.json({ success: true });
+  });
+
+  // --------------------------------------
 
   // Join group via invite code
   app.post("/api/groups/join", (req, res) => {
