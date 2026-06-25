@@ -52,7 +52,6 @@ export default function App() {
   const [selectedCountryKey, setSelectedCountryKey] = useState<string>("GER");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [globalError, setGlobalError] = useState<string | null>(null);
-  const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -451,29 +450,6 @@ export default function App() {
     }
   };
 
-  // Reset database to initial chat data
-  const handleResetDatabase = async () => {
-    setIsLoading(true);
-    try {
-      // Clear localStorage backups
-      profiles.forEach((p) => {
-        localStorage.removeItem(`panini_owned_${p.id}`);
-        localStorage.removeItem(`panini_duplicates_${p.id}`);
-      });
-
-      const response = await fetch("/api/reset", { method: "POST" });
-      if (!response.ok) throw new Error("Reset fehlgeschlagen.");
-      const data = await response.json();
-      setProfiles(data);
-      setShowResetConfirm(false);
-      triggerSuccessToast("Datenbank auf E-Mail-Ausgangszustand zurückgesetzt!");
-    } catch (err: any) {
-      console.error(err);
-      setGlobalError("Reset-Fehler.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const triggerSuccessToast = (msg: string) => {
     setSuccessToast(msg);
@@ -555,51 +531,10 @@ export default function App() {
               isLoading={isLoading}
               activeUserId={selectedUserId}
             />
-            <button
-              onClick={() => setShowResetConfirm(true)}
-              className="text-xs font-mono font-bold text-slate-500 hover:text-rose-400 transition-colors flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 cursor-pointer h-[38px]"
-              title="Datenbank zurücksetzen"
-            >
-              <Database className="h-3.5 w-3.5" /> DB Reset
-            </button>
           </div>
         </div>
       </header>
 
-      {/* Database Reset Dialog */}
-      <AnimatePresence>
-        {showResetConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full"
-            >
-              <h3 className="font-bold text-lg text-slate-200 flex items-center gap-2">
-                <Database className="h-5 w-5 text-rose-500" /> Datenbank zurücksetzen?
-              </h3>
-              <p className="text-slate-400 text-sm mt-2">
-                Möchtest du alle Sticker-Änderungen verwerfen und die Datenbank auf den Originalzustand zurücksetzen, wie er im E-Mail-Chat von Hassan & Benny dokumentiert ist?
-              </p>
-              <div className="flex justify-end gap-3 mt-5">
-                <button
-                  onClick={() => setShowResetConfirm(false)}
-                  className="bg-slate-950 text-slate-400 border border-slate-800 hover:bg-slate-800 hover:text-slate-200 text-xs font-semibold px-4 py-2 rounded-xl cursor-pointer"
-                >
-                  Abbrechen
-                </button>
-                <button
-                  onClick={handleResetDatabase}
-                  className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2 rounded-xl cursor-pointer"
-                >
-                  Ja, zurücksetzen
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col gap-6">
         
