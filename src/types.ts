@@ -57,7 +57,7 @@ export interface NotificationLog {
 
 // 48 teams qualified for World Cup 2026 + Special Category (FWC)
 export const COUNTRIES: Record<string, { name: string; flag: string; group: string }> = {
-  FWC: { name: "FIFA Specials", flag: "🏆", group: "Special" },
+  FWC: { name: "FIFA Specials", flag: "/2026-FIFA-World-Cup-logo.png", group: "Special" },
   GER: { name: "Deutschland", flag: "🇩🇪", group: "A" },
   USA: { name: "USA", flag: "🇺🇸", group: "A" },
   MEX: { name: "Mexiko", flag: "🇲🇽", group: "A" },

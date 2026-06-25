@@ -1145,7 +1145,7 @@ export const COUNTRY_ISO_MAP: Record<string, string> = {
 export function getCountryFlagUrl(countryCode: string): string {
   const code = countryCode.trim().toUpperCase();
   if (code === "FWC") {
-    return "https://upload.wikimedia.org/wikipedia/en/thumb/5/53/2026_FIFA_World_Cup_official_logo.svg/512px-2026_FIFA_World_Cup_official_logo.svg.png";
+    return "/2026-FIFA-World-Cup-logo.png";
   }
   const iso = COUNTRY_ISO_MAP[code];
   if (iso) return `https://flagcdn.com/w80/${iso}.png`;
