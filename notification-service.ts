@@ -130,6 +130,9 @@ export async function runMatchmaking(db: any, updatedUserId: string, saveDbCallb
                 // Send the email via the Google Apps Script Webhook
                 const response = await fetch(process.env.GOOGLE_MAIL_WEBHOOK, {
                   method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
                   body: JSON.stringify({
                     to: userB.email,
                     subject: subject,
