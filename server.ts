@@ -50,8 +50,8 @@ async function startServer() {
       }
     }
     
-    // Remove default profiles and undefined profiles completely
-    const keysToRemove = ["benny", "hassan", "oliver", "jonas", "undefined"];
+    // Remove only undefined profiles
+    const keysToRemove = ["undefined"];
     let changed = false;
     for (const key of keysToRemove) {
       if (db[key]) {
@@ -69,7 +69,7 @@ async function startServer() {
     if (changed || !db._db_cleared_to_zero) {
       db._db_cleared_to_zero = true;
       fs.writeFileSync(dbPath, JSON.stringify(db, null, 2), "utf-8");
-      console.log("Database cleaned of Benny, Hassan, Oliver, Jonas, and undefined.");
+      console.log("Database cleaned of undefined profiles.");
     }
   } catch (err) {
     console.error("Failed to clean database on startup:", err);
