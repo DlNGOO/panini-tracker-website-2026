@@ -5,7 +5,7 @@ import TradeCenter from "./components/TradeCenter";
 import StatsDashboard from "./components/StatsDashboard";
 import NationsProgressTable from "./components/NationsProgressTable";
 import NotificationTray from "./components/NotificationTray";
-import WhatsAppBotCenter from "./components/WhatsAppBotCenter";
+import NotificationBotCenter from "./components/NotificationBotCenter";
 import LoginScreen from "./components/LoginScreen";
 import ProfileView from "./components/ProfileView";
 import Avatar from "./components/Avatar";
@@ -524,7 +524,7 @@ export default function App() {
       const data = await response.json();
       setProfiles(data);
       setShowResetConfirm(false);
-      triggerSuccessToast("Datenbank auf WhatsApp-Ausgangszustand zurückgesetzt!");
+      triggerSuccessToast("Datenbank auf E-Mail-Ausgangszustand zurückgesetzt!");
     } catch (err: any) {
       console.error(err);
       setGlobalError("Reset-Fehler.");
@@ -591,7 +591,7 @@ export default function App() {
                   Gruppe Chat
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-mono tracking-wide mt-0.5">Sticker-Manager • WhatsApp Inside Edition</p>
+              <p className="text-xs text-slate-500 font-mono tracking-wide mt-0.5">Sticker-Manager • E-Mail Inside Edition</p>
             </div>
           </div>
 
@@ -639,7 +639,7 @@ export default function App() {
                 <Database className="h-5 w-5 text-rose-500" /> Datenbank zurücksetzen?
               </h3>
               <p className="text-slate-400 text-sm mt-2">
-                Möchtest du alle Sticker-Änderungen verwerfen und die Datenbank auf den Originalzustand zurücksetzen, wie er im WhatsApp-Chat von Hassan & Benny dokumentiert ist?
+                Möchtest du alle Sticker-Änderungen verwerfen und die Datenbank auf den Originalzustand zurücksetzen, wie er im E-Mail-Chat von Hassan & Benny dokumentiert ist?
               </p>
               <div className="flex justify-end gap-3 mt-5">
                 <button

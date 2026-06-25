@@ -8,9 +8,9 @@ import {
   runMatchmaking,
   getLocksDb,
   saveLocksDb,
-  initializeWhatsAppBot,
-  getWhatsAppBotStatus
-} from "./whatsapp-service";
+  initializeMailBot,
+  getMailBotStatus
+} from "./notification-service";
 
 // Initialize Gemini AI only if API key is provided
 let ai: GoogleGenAI | null = null;
@@ -421,14 +421,14 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  // Get current WhatsApp bot status
+  // Get current Mail bot status
   app.get("/api/notifications/bot-status", (req, res) => {
-    res.json(getWhatsAppBotStatus());
+    res.json(getMailBotStatus());
   });
 
-  // Manually trigger WhatsApp bot client initialization
+  // Manually trigger Mail bot client initialization
   app.post("/api/notifications/bot-init", async (req, res) => {
-    const result = await initializeWhatsAppBot();
+    const result = await initializeMailBot();
     res.json(result);
   });
 

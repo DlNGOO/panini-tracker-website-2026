@@ -164,7 +164,7 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
         body: JSON.stringify({ message: messageText })
       });
       if (res.ok) {
-        setSuccessMsg("WhatsApp-Gruppenbenachrichtigung wurde gesendet!");
+        setSuccessMsg("E-Mail-Gruppenbenachrichtigung wurde gesendet!");
         setTimeout(() => setSuccessMsg(null), 4000);
         fetchNotificationLogs();
       } else {
@@ -230,7 +230,7 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
           <Users className="h-12 w-12 text-indigo-400 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-slate-100">Gruppen & Tausch-Center</h1>
           <p className="text-slate-400 text-sm mt-2 max-w-lg mx-auto">
-            Erstelle eine Gruppe, lade Freunde ein und sammelt eure WM 2026 Sticker gemeinsam! Der integrierte WhatsApp-Bot sendet automatische Tauschanfragen, wenn jemand doppelte Sticker hat, die anderen fehlen.
+            Erstelle eine Gruppe, lade Freunde ein und sammelt eure WM 2026 Sticker gemeinsam! Der integrierte E-Mail-Bot sendet automatische Tauschanfragen, wenn jemand doppelte Sticker hat, die anderen fehlen.
           </p>
         </div>
 
@@ -593,7 +593,7 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
                 <AlertCircle className="h-10 w-10 text-slate-500 mb-3" />
                 <h3 className="font-bold text-slate-300 text-lg">Keine Tauschvorschläge</h3>
                 <p className="text-slate-500 text-xs max-w-md mt-1 mx-auto">
-                  Aktuell gibt es keine passenden Überschneidungen in deiner Gruppe. Lade mehr Freunde in deine Gruppe ein, trage mehr doppelte Sticker in dein Album ein oder importiere sie über den WhatsApp KI-Import!
+                  Aktuell gibt es keine passenden Überschneidungen in deiner Gruppe. Lade mehr Freunde in deine Gruppe ein, trage mehr doppelte Sticker in dein Album ein oder importiere sie über den E-Mail KI-Import!
                 </p>
               </div>
             ) : (
@@ -740,7 +740,7 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
 
                 <div className="mt-4 bg-slate-950 p-4 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
                   <div>
-                    <span className="font-bold text-slate-200">Ziel WhatsApp-Gruppe:</span>
+                    <span className="font-bold text-slate-200">Ziel E-Mail-Gruppe:</span>
                     <a href="https://chat.whatsapp.com/Jct87KPblvyDc5PA9m3MH1" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline ml-1 font-mono break-all">
                       https://chat.whatsapp.com/Jct87KPblvyDc5PA9m3MH1
                     </a>
@@ -787,7 +787,7 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
                           className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 shrink-0 shadow active:scale-95 cursor-pointer"
                         >
                           <Send className="h-3 w-3" />
-                          <span>WhatsApp senden</span>
+                          <span>E-Mail senden</span>
                         </button>
                       </div>
                     ))}
@@ -804,7 +804,7 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
                   <span>Sende-Log (Simuliert)</span>
                 </h3>
                 <p className="text-slate-500 text-[11px] mt-1">
-                  Hier siehst du die letzten versendeten Nachrichten an die WhatsApp-Gruppe.
+                  Hier siehst du die letzten versendeten Nachrichten an die E-Mail-Gruppe.
                 </p>
               </div>
 
@@ -822,7 +822,7 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
                             ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
                             : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
                         }`}>
-                          {log.status === "sent" ? "WhatsApp Aktiv" : "Simuliert"}
+                          {log.status === "sent" ? "E-Mail Aktiv" : "Simuliert"}
                         </span>
                         <span className="text-slate-500 font-mono">
                           {new Date(log.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
@@ -833,7 +833,7 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
                       </p>
                       <div className="text-[9px] text-slate-500 border-t border-slate-900 pt-1 flex items-center gap-1">
                         <CheckCircle className="h-2.5 w-2.5 text-slate-500" />
-                        <span>Ziel: WhatsApp-Gruppe Jct87KPblvyD...</span>
+                        <span>Ziel: E-Mail-Gruppe Jct87KPblvyD...</span>
                       </div>
                     </div>
                   ))
