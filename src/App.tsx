@@ -79,65 +79,12 @@ export default function App() {
       }
       const data: UserProfile[] = await response.json();
       
-      // Sync with localStorage to protect against ephemeral server restarts
-      const updatedData = await Promise.all(data.map(async (profile) => {
-        const localOwnedStr = localStorage.getItem(`panini_owned_${profile.id}`);
-        const localDupStr = localStorage.getItem(`panini_duplicates_${profile.id}`);
-        
-        let localOwned: string[] = [];
-        let localDuplicates: Record<string, number> = {};
-        let hasLocalBackup = false;
-
-        if (localOwnedStr && localOwnedStr !== "undefined") {
-          try {
-            localOwned = JSON.parse(localOwnedStr);
-            hasLocalBackup = true;
-          } catch (e) {
-            console.warn(`Ungültige gespeicherte eigene Sticker für ${profile.name}:`, localOwnedStr);
-          }
-        }
-
-        if (localDupStr && localDupStr !== "undefined") {
-          try {
-            localDuplicates = JSON.parse(localDupStr);
-            hasLocalBackup = true;
-          } catch (e) {
-            console.warn(`Ungültige gespeicherte doppelte Sticker für ${profile.name}:`, localDupStr);
-          }
-        }
-
-        if (hasLocalBackup) {
-          // Check if local storage differs from what the server returned
-          const hasDifferentOwned = JSON.stringify(localOwned) !== JSON.stringify(profile.owned);
-          const hasDifferentDuplicates = JSON.stringify(localDuplicates) !== JSON.stringify(profile.duplicates);
-          
-          if (hasDifferentOwned || hasDifferentDuplicates) {
-            console.log(`Syncing ${profile.name} from browser cache (localStorage) to server to restore data...`);
-            try {
-              const syncRes = await fetch(`/api/profiles/${profile.id}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ owned: localOwned, duplicates: localDuplicates }),
-              });
-              if (syncRes.ok) {
-                const synced = await syncRes.json();
-                // CRITICAL: Update localStorage to match what the server now has,
-                // so the next fetchProfiles() call does NOT detect a difference again.
-                localStorage.setItem(`panini_owned_${profile.id}`, JSON.stringify(synced.owned || []));
-                localStorage.setItem(`panini_duplicates_${profile.id}`, JSON.stringify(synced.duplicates || {}));
-                return synced;
-              }
-            } catch (err) {
-              console.error(`Syncing error for ${profile.name}:`, err);
-            }
-          }
-        } else {
-          // Store initial server data as backup if local storage is blank or invalid
-          localStorage.setItem(`panini_owned_${profile.id}`, JSON.stringify(profile.owned || []));
-          localStorage.setItem(`panini_duplicates_${profile.id}`, JSON.stringify(profile.duplicates || {}));
-        }
+      // Update localStorage with the latest server data
+      const updatedData = data.map((profile) => {
+        localStorage.setItem(`panini_owned_${profile.id}`, JSON.stringify(profile.owned || []));
+        localStorage.setItem(`panini_duplicates_${profile.id}`, JSON.stringify(profile.duplicates || {}));
         return profile;
-      }));
+      });
 
 
       // Select the first user if current selection is not found, but only if they were logged in

@@ -445,10 +445,10 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
       )}
 
       {/* Group Navigation Bar */}
-      <div className="flex border-b border-slate-800/80">
+      <div className="flex overflow-x-auto border-b border-slate-800/80 no-scrollbar">
         <button
           onClick={() => setActiveSubTab("stats")}
-          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
             activeSubTab === "stats"
               ? "border-indigo-500 text-indigo-400 font-bold"
               : "border-transparent text-slate-400 hover:text-slate-200"
@@ -459,7 +459,7 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
         </button>
         <button
           onClick={() => setActiveSubTab("trades")}
-          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
             activeSubTab === "trades"
               ? "border-indigo-500 text-indigo-400 font-bold"
               : "border-transparent text-slate-400 hover:text-slate-200"
@@ -475,7 +475,7 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
         </button>
         <button
           onClick={() => setActiveSubTab("bot")}
-          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap shrink-0 ${
             activeSubTab === "bot"
               ? "border-indigo-500 text-indigo-400 font-bold"
               : "border-transparent text-slate-400 hover:text-slate-200"
