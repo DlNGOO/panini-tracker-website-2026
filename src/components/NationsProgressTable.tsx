@@ -23,6 +23,7 @@ const CSV_NATION_ORDER = [
 
 export default function NationsProgressTable({ profile, onSelectCountry }: NationsProgressTableProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedGroup, setSelectedGroup] = useState("Alle");
   const [sortBy, setSortBy] = useState<"default" | "name" | "progress" | "duplicates">("default");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
@@ -61,12 +62,12 @@ export default function NationsProgressTable({ profile, onSelectCountry }: Natio
     };
   });
 
-  // Filter nations based on search query
+  // Filter nations based on search query and group
   const filteredData = countriesData.filter((item) => {
-    return (
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.key.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          item.key.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesGroup = selectedGroup === "Alle" || item.group === selectedGroup;
+    return matchesSearch && matchesGroup;
   });
 
   // Sort nations
@@ -155,8 +156,8 @@ export default function NationsProgressTable({ profile, onSelectCountry }: Natio
 
       {/* Control bar with search and layout information */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="relative w-full sm:w-80">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
             <input
               type="text"
@@ -166,6 +167,26 @@ export default function NationsProgressTable({ profile, onSelectCountry }: Natio
               className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
             />
           </div>
+          <select
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors w-full sm:w-auto"
+          >
+            <option value="Alle">Alle Gruppen</option>
+            <option value="A">Gruppe A</option>
+            <option value="B">Gruppe B</option>
+            <option value="C">Gruppe C</option>
+            <option value="D">Gruppe D</option>
+            <option value="E">Gruppe E</option>
+            <option value="F">Gruppe F</option>
+            <option value="G">Gruppe G</option>
+            <option value="H">Gruppe H</option>
+            <option value="I">Gruppe I</option>
+            <option value="J">Gruppe J</option>
+            <option value="K">Gruppe K</option>
+            <option value="L">Gruppe L</option>
+            <option value="Special">Specials</option>
+          </select>
         </div>
 
         {/* Info Legend Box from Spreadsheet */}
