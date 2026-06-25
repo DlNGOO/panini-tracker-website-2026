@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { COUNTRIES, STICKERS_PER_TEAM, UserProfile } from "../types";
-import { Check, Plus, Minus, Search, X, ZoomIn, Info } from "lucide-react";
+import { Check, Plus, Minus, Search, X, ZoomIn, Info, List } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { getStickerName, getStickerImageUrl, getCountryFlagUrl } from "../playerData";
 
@@ -25,6 +25,7 @@ export default function AlbumView({
 
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [filterMode, setFilterMode] = useState<"all" | "missing" | "owned" | "duplicates">("all");
+  const [displayMode, setDisplayMode] = useState<"image" | "compact">("image");
   const [lightboxCode, setLightboxCode] = useState<string | null>(null);
 
   const countriesKeys = Object.keys(COUNTRIES);
@@ -146,6 +147,27 @@ export default function AlbumView({
         </div>
 
         <div className="flex-1 overflow-y-auto pr-1 space-y-1 mt-2">
+          <button
+            onClick={() => {
+              setSelectedCountryKey("GLOBAL_DUPLICATES");
+              setFilterMode("duplicates");
+            }}
+            className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all mb-2 ${
+              selectedCountryKey === "GLOBAL_DUPLICATES"
+                ? "bg-rose-950/40 border border-rose-800/60 text-rose-200"
+                : "border border-transparent text-rose-400 hover:bg-slate-800/40 hover:text-rose-200"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex items-center justify-center w-8 h-8 bg-slate-950 border border-slate-800 p-1 rounded-lg shrink-0 text-lg">
+                🌍
+              </span>
+              <div>
+                <div className="font-semibold text-sm text-slate-200">Alle Doppelten</div>
+                <div className="text-[10px] text-slate-500 font-mono tracking-wider">GLOBALE ÜBERSICHT</div>
+              </div>
+            </div>
+          </button>
           {filteredCountryKeys.map((key) => {
             const country = COUNTRIES[key];
             const countryStickers = Array.from({ length: STICKERS_PER_TEAM }, (_, i) => `${key}${i + 1}`);
@@ -196,19 +218,27 @@ export default function AlbumView({
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <span className="flex items-center justify-center w-14 h-14 shadow-inner bg-slate-950 p-2 rounded-xl border border-slate-800 shrink-0">
-              <img
-                src={getCountryFlagUrl(selectedCountryKey)}
-                alt={activeCountry.name}
-                className={`${selectedCountryKey === "FWC" ? "w-10 h-10 object-contain" : "w-11 h-8 object-cover rounded-md"} shadow-sm`}
-                referrerPolicy="no-referrer"
-              />
+              {selectedCountryKey === "GLOBAL_DUPLICATES" ? (
+                <span className="text-3xl">🌍</span>
+              ) : (
+                <img
+                  src={getCountryFlagUrl(selectedCountryKey)}
+                  alt={activeCountry?.name}
+                  className={`${selectedCountryKey === "FWC" ? "w-10 h-10 object-contain" : "w-11 h-8 object-cover rounded-md"} shadow-sm`}
+                  referrerPolicy="no-referrer"
+                />
+              )}
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-slate-100">{activeCountry.name}</h2>
-                <span className="bg-indigo-900/40 text-indigo-300 border border-indigo-800/40 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase">
-                  Gruppe {activeCountry.group}
-                </span>
+                <h2 className="text-xl font-bold text-slate-100">
+                  {selectedCountryKey === "GLOBAL_DUPLICATES" ? "Alle Doppelten Sticker" : activeCountry?.name}
+                </h2>
+                {selectedCountryKey !== "GLOBAL_DUPLICATES" && (
+                  <span className="bg-indigo-900/40 text-indigo-300 border border-indigo-800/40 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase">
+                    Gruppe {activeCountry?.group}
+                  </span>
+                )}
               </div>
               {!readonly && (
                 <p className="text-slate-400 text-xs mt-1">
@@ -218,35 +248,100 @@ export default function AlbumView({
               )}
             </div>
           </div>
-          <div className="flex gap-3">
-            <div className="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800 text-center min-w-[80px]">
-              <div className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Gesammelt</div>
-              <div className="text-lg font-bold text-emerald-400 font-mono">
-                {Array.from({ length: STICKERS_PER_TEAM }).filter((_, i) => profileOwned.includes(`${selectedCountryKey}${i + 1}`)).length}
-              </div>
+          <div className="flex gap-3 items-center">
+            <div className="bg-slate-950 flex p-1 rounded-xl border border-slate-800 mr-2">
+              <button 
+                onClick={() => setDisplayMode("image")}
+                className={`p-1.5 rounded-lg transition-colors ${displayMode === "image" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-300"}`}
+                title="Bilder Ansicht"
+              >
+                <ZoomIn className="h-4 w-4" />
+              </button>
+              <button 
+                onClick={() => setDisplayMode("compact")}
+                className={`p-1.5 rounded-lg transition-colors ${displayMode === "compact" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-300"}`}
+                title="Kompakt Ansicht"
+              >
+                <List className="h-4 w-4" />
+              </button>
             </div>
-            <div className="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800 text-center min-w-[80px]">
-              <div className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Doppelt</div>
-              <div className="text-lg font-bold text-rose-400 font-mono">
-                {Array.from({ length: STICKERS_PER_TEAM }).reduce<number>((acc, _, i) => acc + (profileDuplicates[`${selectedCountryKey}${i + 1}`] || 0), 0)}
-              </div>
-            </div>
+            {selectedCountryKey !== "GLOBAL_DUPLICATES" && (
+              <>
+                <div className="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800 text-center min-w-[80px]">
+                  <div className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Gesammelt</div>
+                  <div className="text-lg font-bold text-emerald-400 font-mono">
+                    {Array.from({ length: STICKERS_PER_TEAM }).filter((_, i) => profileOwned.includes(`${selectedCountryKey}${i + 1}`)).length}
+                  </div>
+                </div>
+                <div className="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800 text-center min-w-[80px]">
+                  <div className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Doppelt</div>
+                  <div className="text-lg font-bold text-rose-400 font-mono">
+                    {Array.from({ length: STICKERS_PER_TEAM }).reduce<number>((acc, _, i) => acc + (profileDuplicates[`${selectedCountryKey}${i + 1}`] || 0), 0)}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Sticker Grid – 600×835 aspect ratio */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-5 gap-3">
-          {Array.from({ length: STICKERS_PER_TEAM }).map((_, idx) => {
-            const num = idx + 1;
-            const stickerCode = `${selectedCountryKey}${num}`;
-            const owned = profileOwned.includes(stickerCode);
-            const duplicateCount = profileDuplicates[stickerCode] || 0;
-            const shiny = isShinySticker(num);
-            const imgUrl = getStickerImageUrl(stickerCode);
+        {/* Sticker Grid */}
+        <div className={`grid gap-3 ${displayMode === "compact" ? "grid-cols-3 sm:grid-cols-5 xl:grid-cols-8" : "grid-cols-2 sm:grid-cols-4 xl:grid-cols-5"}`}>
+          {(() => {
+            let stickersToRender: string[] = [];
+            
+            if (selectedCountryKey === "GLOBAL_DUPLICATES") {
+              stickersToRender = Object.keys(profileDuplicates).filter(code => profileDuplicates[code] > 0);
+              // Ensure consistent country ordering
+              stickersToRender.sort((a, b) => {
+                const cA = a.replace(/[0-9]/g, '');
+                const cB = b.replace(/[0-9]/g, '');
+                if (cA !== cB) {
+                  const idxA = countriesKeys.indexOf(cA);
+                  const idxB = countriesKeys.indexOf(cB);
+                  return idxA - idxB;
+                }
+                const numA = parseInt(a.replace(/[^\d]/g, ''), 10);
+                const numB = parseInt(b.replace(/[^\d]/g, ''), 10);
+                return numA - numB;
+              });
+            } else {
+              stickersToRender = Array.from({ length: STICKERS_PER_TEAM }).map((_, idx) => `${selectedCountryKey}${idx + 1}`);
+            }
 
-            if (filterMode === "missing" && owned) return null;
-            if (filterMode === "owned" && !owned) return null;
-            if (filterMode === "duplicates" && duplicateCount === 0) return null;
+            return stickersToRender.map((stickerCode) => {
+              const match = stickerCode.match(/\d+/);
+              const num = match ? parseInt(match[0], 10) : 1;
+              const owned = profileOwned.includes(stickerCode);
+              const duplicateCount = profileDuplicates[stickerCode] || 0;
+              const shiny = isShinySticker(num);
+              const imgUrl = getStickerImageUrl(stickerCode);
+
+              if (filterMode === "missing" && owned) return null;
+              if (filterMode === "owned" && !owned) return null;
+              if (filterMode === "duplicates" && duplicateCount === 0) return null;
+
+              if (displayMode === "compact") {
+                let compactColors = "border-slate-700 bg-slate-950/60 text-slate-500 border-dashed";
+                if (owned) {
+                  if (duplicateCount === 1) compactColors = "border-rose-400 bg-rose-500/10 text-rose-400";
+                  else if (duplicateCount > 1) compactColors = "border-red-600 bg-red-600/20 text-red-500 font-bold";
+                  else compactColors = "border-emerald-500/50 bg-emerald-500/10 text-emerald-400";
+                }
+
+                return (
+                  <div 
+                    key={stickerCode}
+                    onDoubleClick={() => !readonly && handleDoubleClick(stickerCode)}
+                    className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer select-none transition-all hover:scale-105 ${compactColors}`}
+                    title={readonly ? undefined : (owned ? "Doppelklick zum Entfernen" : "Doppelklicken zum Sammeln")}
+                  >
+                    <span className="font-mono text-xs">{stickerCode}</span>
+                    {duplicateCount > 0 && (
+                      <span className={`text-[10px] font-bold px-1 rounded ${duplicateCount > 1 ? "bg-red-700 text-white" : "bg-rose-400/30"}`}>+{duplicateCount}</span>
+                    )}
+                  </div>
+                );
+              }
 
             // ── Border class logic ──
             // Priority: duplicate color > owned-default > unowned
@@ -394,7 +489,8 @@ export default function AlbumView({
                 )}
               </motion.div>
             );
-          })}
+            });
+          })()}
         </div>
 
         {/* Legend */}
