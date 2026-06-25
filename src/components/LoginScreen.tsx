@@ -138,7 +138,7 @@ export default function LoginScreen({
       <div 
         className="fixed inset-0 pointer-events-none opacity-30 z-0" 
         style={{ 
-          backgroundImage: "url('/Background.png')", 
+          backgroundImage: "url('/background.jpg')", 
           backgroundSize: 'cover', 
           backgroundPosition: 'center', 
           backgroundAttachment: 'fixed',
