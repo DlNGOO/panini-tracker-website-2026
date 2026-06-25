@@ -350,25 +350,38 @@ export default function AlbumView({
                 ) : (
                   /* ── UNOWNED: Placeholder ── */
                   <div className="absolute inset-0 flex flex-col">
-                    <div className="flex items-start justify-between p-2">
-                      <span className="font-mono text-[9px] font-bold text-slate-500 tracking-wider">{stickerCode}</span>
-                      <span className="text-slate-700 text-[8px] font-semibold">FEHLT</span>
-                    </div>
-                    <div className="flex-1 flex flex-col items-center justify-center gap-1.5 px-2">
-                      <div className="text-3xl font-black font-mono text-slate-700">{num}</div>
+                    {imgUrl && (
                       <img
-                        src={getCountryFlagUrl(selectedCountryKey)}
-                        alt={activeCountry.name}
-                        className={`${selectedCountryKey === "FWC" ? "w-6 h-6 object-contain" : "w-7 h-5 object-cover rounded"} opacity-25`}
-                        referrerPolicy="no-referrer"
+                        src={imgUrl}
+                        alt={`Sticker ${stickerCode} fehlt`}
+                        className="absolute inset-0 w-full h-full object-cover grayscale opacity-40 mix-blend-luminosity"
+                        draggable={false}
                       />
-                      <div className="text-[9px] text-slate-600 font-medium text-center leading-tight px-1 mt-0.5 line-clamp-2">
-                        {getStickerName(stickerCode)}
-                      </div>
+                    )}
+                    <div className="relative z-10 flex items-start justify-between p-1.5">
+                      <span className="font-mono text-[9px] font-bold text-slate-300 bg-slate-950/70 px-1.5 py-0.5 rounded backdrop-blur-sm tracking-wider">
+                        {stickerCode}
+                      </span>
+                      <span className="text-rose-400 text-[8px] bg-rose-950/50 border border-rose-900/50 px-1.5 py-0.5 rounded font-bold backdrop-blur-sm">
+                        FEHLT
+                      </span>
                     </div>
-                    <div className="p-2 border-t border-slate-800/50">
-                      <div className="text-center text-[8px] text-slate-600 font-medium tracking-wide">
-                        ↕ Doppelklick zum Sammeln
+                    <div className="relative z-10 flex-1 flex flex-col items-center justify-center gap-1.5 px-2">
+                      {!imgUrl && (
+                        <>
+                          <div className="text-3xl font-black font-mono text-slate-700">{num}</div>
+                          <img
+                            src={getCountryFlagUrl(selectedCountryKey)}
+                            alt={activeCountry.name}
+                            className={`${selectedCountryKey === "FWC" ? "w-6 h-6 object-contain" : "w-7 h-5 object-cover rounded"} opacity-25`}
+                            referrerPolicy="no-referrer"
+                          />
+                        </>
+                      )}
+                    </div>
+                    <div className="relative z-10 p-1.5 border-t border-slate-800/80 bg-slate-950/70 backdrop-blur-sm">
+                      <div className="text-center text-[9px] text-slate-300 font-medium tracking-wide truncate">
+                        {getStickerName(stickerCode)}
                       </div>
                     </div>
                   </div>
