@@ -434,6 +434,7 @@ export default function App() {
 
   // Delete profile
   const handleDeleteProfile = async (id: string) => {
+    if (!window.confirm("Bist du sicher, dass du dieses Profil endgültig löschen möchtest?")) return;
     setIsLoading(true);
     try {
       const response = await fetch(`/api/profiles/${id}`, {
