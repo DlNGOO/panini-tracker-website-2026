@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { UserProfile, GroupDetails, COUNTRIES } from "../types";
 import Avatar from "./Avatar";
+import NotificationBotCenter from "./NotificationBotCenter";
 import { 
   Users, Plus, LogIn, Copy, Check, BarChart2, ArrowLeftRight, 
   MessageSquare, AlertCircle, RefreshCw, Send, ShieldAlert, CheckCircle 
@@ -722,125 +723,7 @@ export default function GroupCenter({ user, onUpdateUser, onExecuteTrade, isLoad
 
         {/* TAB 3: GROUP BOT */}
         {activeSubTab === "bot" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Analysis and Controls (Left & Mid) */}
-            <div className="lg:col-span-2 space-y-6">
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                <div className="flex items-center gap-3">
-                  <div className="bg-amber-500/10 text-amber-500 p-2.5 rounded-xl">
-                    <MessageSquare className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-200">Panini Matchmaker Bot 🤖</h3>
-                    <p className="text-slate-400 text-xs mt-0.5">
-                      Analysiert kontinuierlich, wer doppelte Sticker hat, die anderen in dieser Gruppe noch fehlen.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 bg-slate-950 p-4 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                  <div>
-                    <span className="font-bold text-slate-200">Ziel E-Mail-Gruppe:</span>
-                    <a href="https://chat.whatsapp.com/Jct87KPblvyDc5PA9m3MH1" target="_blank" rel="noopener noreferrer" className="text-indigo-400 hover:underline ml-1 font-mono break-all">
-                      https://chat.whatsapp.com/Jct87KPblvyDc5PA9m3MH1
-                    </a>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bot findings list */}
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-                <h4 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-                  <span>Aktuelle Tausch-Konstellationen</span>
-                  <span className="bg-amber-500/10 text-amber-500 text-xs px-2 py-0.5 rounded-full font-mono font-bold">
-                    {botAnalysis.length}
-                  </span>
-                </h4>
-
-                {botAnalysis.length === 0 ? (
-                  <div className="bg-slate-950/40 p-8 rounded-xl text-center border border-slate-850">
-                    <AlertCircle className="h-8 w-8 text-slate-500 mx-auto mb-2" />
-                    <p className="text-slate-400 text-xs">Aktuell keine Tauschvorschläge für den Bot vorhanden.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
-                    {botAnalysis.map((finding, idx) => (
-                      <div key={idx} className="bg-slate-950 p-3.5 rounded-xl border border-slate-850 flex items-center justify-between gap-4 text-xs">
-                        <div className="flex items-center gap-2 flex-wrap text-slate-300">
-                          <span className="font-bold text-slate-100 flex items-center gap-1 bg-slate-900 px-2 py-1 rounded">
-                            <Avatar avatar={finding.giverAvatar} className="text-sm scale-90" />
-                            {finding.giverName}
-                          </span>
-                          <span>hat</span>
-                          <span className="font-mono bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded font-bold border border-indigo-500/20">
-                            {finding.stickerDisplay}
-                          </span>
-                          <span>doppelt, das</span>
-                          <span className="font-bold text-slate-100 bg-slate-900 px-2 py-1 rounded">
-                            {finding.receiverName}
-                          </span>
-                          <span>sucht!</span>
-                        </div>
-
-                        <button
-                          onClick={() => triggerBotAlert(finding.giverName, finding.receiverName, finding.stickerDisplay)}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 shrink-0 shadow active:scale-95 cursor-pointer"
-                        >
-                          <Send className="h-3 w-3" />
-                          <span>E-Mail senden</span>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Notification logs (Right column) */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col h-[585px]">
-              <div className="border-b border-slate-800 pb-4 mb-4">
-                <h3 className="font-bold text-slate-200 flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4 text-indigo-400" />
-                  <span>Sende-Log (Simuliert)</span>
-                </h3>
-                <p className="text-slate-500 text-[11px] mt-1">
-                  Hier siehst du die letzten versendeten Nachrichten an die E-Mail-Gruppe.
-                </p>
-              </div>
-
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                {notificationLogs.length === 0 ? (
-                  <div className="text-center py-12 text-slate-600 text-xs italic">
-                    Noch keine Nachrichten versendet.
-                  </div>
-                ) : (
-                  notificationLogs.map((log: any) => (
-                    <div key={log.id} className="bg-slate-950 p-3 rounded-xl border border-slate-850 space-y-1.5">
-                      <div className="flex items-center justify-between text-[10px]">
-                        <span className={`px-1.5 py-0.5 rounded font-bold ${
-                          log.status === "sent" 
-                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
-                            : "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
-                        }`}>
-                          {log.status === "sent" ? "E-Mail Aktiv" : "Simuliert"}
-                        </span>
-                        <span className="text-slate-500 font-mono">
-                          {new Date(log.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                        </span>
-                      </div>
-                      <p className="text-slate-300 text-xs italic leading-relaxed">
-                        "{log.message}"
-                      </p>
-                      <div className="text-[9px] text-slate-500 border-t border-slate-900 pt-1 flex items-center gap-1">
-                        <CheckCircle className="h-2.5 w-2.5 text-slate-500" />
-                        <span>Ziel: E-Mail-Gruppe Jct87KPblvyD...</span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
+          <NotificationBotCenter />
         )}
       </div>
     </div>
