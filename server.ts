@@ -44,7 +44,7 @@ async function startServer() {
 
   // Helper to save database
   let cloudSyncTimeout: NodeJS.Timeout | null = null;
-  function saveDb(data: Record<string, any>, immediate: boolean = false) {
+  async function saveDb(data: Record<string, any>, immediate: boolean = false) {
     memoryDb = data;
     // Local backup
     try {
@@ -55,20 +55,25 @@ async function startServer() {
     
     // Cloud sync
     if (cloudSyncEnabled && process.env.JSONBIN_BIN_ID && process.env.JSONBIN_API_KEY) {
-      const syncCloud = () => {
-        fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Master-Key': process.env.JSONBIN_API_KEY!
-          },
-          body: JSON.stringify(memoryDb)
-        }).catch(err => console.error("Cloud DB sync failed:", err));
+      const syncCloud = async () => {
+        try {
+          const res = await fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Master-Key': process.env.JSONBIN_API_KEY!
+            },
+            body: JSON.stringify(memoryDb)
+          });
+          if (!res.ok) console.error("Cloud DB sync failed with HTTP status:", res.status);
+        } catch (err) {
+          console.error("Cloud DB sync failed (Network):", err);
+        }
       };
 
       if (immediate) {
         if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
-        syncCloud();
+        await syncCloud();
       } else {
         if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
         cloudSyncTimeout = setTimeout(syncCloud, 5000); // 5 second debounce
@@ -125,7 +130,7 @@ async function startServer() {
   // --- API ROUTES ---
 
   // Register a new user profile with a password
-  app.post("/api/register", (req, res) => {
+  app.post("/api/register", async (req, res) => {
     const { name, password, avatar, email, phoneNumber, notifyPreference, groupId } = req.body;
     if (!name || !password) {
       return res.status(400).json({ error: "Name und Passwort sind erforderlich." });
@@ -148,7 +153,7 @@ async function startServer() {
       groupId: groupId || null
     };
     db[id] = newProfile;
-    saveDb(db, true);
+    await saveDb(db, true);
     res.json({ success: true, profile: newProfile });
   });
 
@@ -229,7 +234,7 @@ async function startServer() {
   });
 
   // Atomic trade endpoint
-  app.post("/api/groups/trade", (req, res) => {
+  app.post("/api/groups/trade", async (req, res) => {
     const { userAId, userBId, userAGives, userBGives } = req.body;
     if (!userAId || !userBId || !userAGives || !userBGives) {
       return res.status(400).json({ error: "Fehlende Parameter für den Tausch." });
@@ -267,13 +272,13 @@ async function startServer() {
     db[userBId.toLowerCase()] = uB;
     
     // Save immediately and skip debounce to ensure trade is safely in cloud
-    saveDb(db, true);
+    await saveDb(db, true);
     
     res.json({ success: true, profileA: uA, profileB: uB });
   });
 
   // Create a new group
-  app.post("/api/groups/create", (req, res) => {
+  app.post("/api/groups/create", async (req, res) => {
     const { name, avatar, userId } = req.body;
     if (!name || !userId) return res.status(400).json({ error: "Missing parameters" });
 
@@ -296,7 +301,7 @@ async function startServer() {
     db["_groups"][groupId] = newGroup;
     db[userId].groupId = groupId;
 
-    saveDb(db, true);
+    await saveDb(db, true);
     res.json({ success: true, group: newGroup, profile: db[userId] });
   });
 
@@ -316,18 +321,18 @@ async function startServer() {
     res.json(db._notification_logs || []);
   });
 
-  app.post("/api/notifications/reset-locks", (req, res) => {
+  app.post("/api/notifications/reset-locks", async (req, res) => {
     const db = getDb();
     db._notification_locks = {};
     db._notification_logs = [];
-    saveDb(db);
+    await saveDb(db);
     res.json({ success: true });
   });
 
   // --------------------------------------
 
   // Join group via invite code
-  app.post("/api/groups/join", (req, res) => {
+  app.post("/api/groups/join", async (req, res) => {
     const { inviteCode, userId } = req.body;
     if (!inviteCode || !userId) {
       return res.status(400).json({ error: "Einladungscode und User-ID sind erforderlich." });
