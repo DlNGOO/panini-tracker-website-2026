@@ -54,8 +54,7 @@ function getStickerDisplay(code: string): string {
   return `${flag} ${name} #${num}`;
 }
 
-// Mail transporter logic
-let transporter: nodemailer.Transporter | null = null;
+// Mail webhook logic
 let mailInitStatus: "idle" | "ready" | "failed" = "idle";
 let lastMailError: string | null = null;
 
@@ -63,30 +62,21 @@ export async function initializeMailBot() {
   if (mailInitStatus === "ready") return { status: "ready" };
 
   try {
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
+    const webhookUrl = process.env.GOOGLE_MAIL_WEBHOOK;
     
-    if (!smtpUser || !smtpPass) {
+    if (!webhookUrl) {
       mailInitStatus = "failed";
-      lastMailError = "SMTP_USER oder SMTP_PASS fehlen in den Umgebungsvariablen.";
+      lastMailError = "GOOGLE_MAIL_WEBHOOK fehlt in den Umgebungsvariablen.";
       return { status: "failed", error: lastMailError };
     }
 
-    transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: smtpUser,
-        pass: smtpPass
-      }
-    });
-
-    await transporter.verify();
+    // We just assume the webhook works if it exists.
     mailInitStatus = "ready";
     lastMailError = null;
-    console.log("[Mail] Nodemailer ready to send emails.");
+    console.log("[Mail] Google Apps Script Webhook is ready.");
     return { status: "ready" };
   } catch (err: any) {
-    console.error("[Mail] Failed to initialize mail transporter:", err);
+    console.error("[Mail] Failed to initialize mail webhook:", err);
     mailInitStatus = "failed";
     lastMailError = err.message || "Unknown error";
     return { status: "failed", error: lastMailError };
@@ -113,7 +103,7 @@ export async function runMatchmaking(profiles: Record<string, UserProfile>, upda
 
   if (userADuplicates.length === 0) return;
 
-  if (mailInitStatus === "idle" && process.env.SMTP_USER && process.env.SMTP_PASS) {
+  if (mailInitStatus === "idle" && process.env.GOOGLE_MAIL_WEBHOOK) {
     await initializeMailBot();
   }
 
@@ -138,15 +128,17 @@ export async function runMatchmaking(profiles: Record<string, UserProfile>, upda
         const stickerDisplay = getStickerDisplay(stickerCode);
         const subject = `🚨 Panini Tausch-Alarm: ${userA.name} hat ${stickerDisplay} für dich!`;
         const htmlMessage = `
-          <h2>Hallo ${userB.name},</h2>
-          <p>Gute Nachrichten aus deiner Panini WM 2026 Gruppe!</p>
-          <p><strong>${userA.name}</strong> hat gerade einen Sticker doppelt eingetragen, den du noch suchst:</p>
-          <h3 style="background-color: #f3f4f6; padding: 10px; border-radius: 8px; display: inline-block;">
-            ${stickerDisplay}
-          </h3>
-          <p>Schau am besten gleich im <a href="https://panini-tracker-website-2026.onrender.com">Panini Tausch-Center</a> vorbei und biete einen Tausch an!</p>
-          <br>
-          <p>Viel Spaß beim Sammeln! ⚽</p>
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
+            <h2>Hallo ${userB.name},</h2>
+            <p>Gute Nachrichten aus deiner Panini WM 2026 Gruppe!</p>
+            <p><strong>${userA.name}</strong> hat gerade einen Sticker doppelt eingetragen, den du noch suchst:</p>
+            <h3 style="background-color: #f3f4f6; padding: 10px; border-radius: 8px; display: inline-block;">
+              ${stickerDisplay}
+            </h3>
+            <p>Schau am besten gleich im <a href="https://panini-tracker-website-2026.onrender.com">Panini Tausch-Center</a> vorbei und biete einen Tausch an!</p>
+            <br>
+            <p>Viel Spaß beim Sammeln! ⚽</p>
+          </div>
         `;
 
         let status: "sent" | "failed" | "simulated" = "simulated";
@@ -158,25 +150,33 @@ export async function runMatchmaking(profiles: Record<string, UserProfile>, upda
 
         if (pref === "email" || pref === "both") {
           if (hasEmail) {
-            if (mailInitStatus === "ready" && transporter) {
+            if (mailInitStatus === "ready" && process.env.GOOGLE_MAIL_WEBHOOK) {
               try {
-                await transporter.sendMail({
-                  from: `"Panini Tracker Bot" <${process.env.SMTP_USER}>`,
-                  to: userB.email,
-                  subject: subject,
-                  html: htmlMessage
+                // Send the email via the Google Apps Script Webhook
+                const response = await fetch(process.env.GOOGLE_MAIL_WEBHOOK, {
+                  method: "POST",
+                  body: JSON.stringify({
+                    to: userB.email,
+                    subject: subject,
+                    html: htmlMessage
+                  })
                 });
-                status = "sent";
-                details = `E-Mail erfolgreich an ${userB.email} gesendet.`;
-                notificationDetails.push(`📧 E-Mail gesendet`);
+
+                if (response.ok) {
+                  status = "sent";
+                  details = `E-Mail erfolgreich via Webhook an ${userB.email} gesendet.`;
+                  notificationDetails.push(`📧 E-Mail gesendet`);
+                } else {
+                  throw new Error(`Webhook antwortete mit Status ${response.status}`);
+                }
               } catch (err: any) {
-                console.error("[Mail] Error sending email:", err);
+                console.error("[Mail] Error sending via webhook:", err);
                 status = "failed";
                 details = `Fehler beim Versenden: ${err.message}`;
               }
             } else {
               status = "simulated";
-              details = `Simuliert: E-Mail an ${userB.email} (SMTP nicht konfiguriert).`;
+              details = `Simuliert: E-Mail an ${userB.email} (Webhook nicht konfiguriert).`;
               notificationDetails.push(`📧 E-Mail simuliert`);
             }
           } else {

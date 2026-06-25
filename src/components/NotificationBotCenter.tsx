@@ -151,22 +151,19 @@ export default function NotificationBotCenter() {
           <div className="mt-6 flex flex-col items-center">
             {botStatus.status === "idle" && (
               <button
-                onClick={handleInitBot}
-                disabled={isInitializingBot}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white text-xs font-black uppercase py-3 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-2"
-              >
-                {isInitializingBot ? <Loader2 className="h-4 w-4 animate-spin" /> : <Settings className="h-4 w-4" />}
-                SMTP-Server verbinden
-              </button>
+                  onClick={handleInitBot}
+                  disabled={isInitializingBot}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isInitializingBot ? "animate-spin" : ""}`} />
+                  WEBHOOK VERBINDEN
+                </button>
             )}
 
             {botStatus.status === "ready" && (
-              <div className="p-4 bg-slate-950 rounded-2xl border border-emerald-500/10 text-center w-full">
-                <CheckCircle className="h-10 w-10 text-emerald-400 mx-auto mb-2 animate-bounce" />
-                <h4 className="text-xs font-bold text-emerald-400">SMTP-Server ist verbunden</h4>
-                <p className="text-[10px] text-slate-500 mt-1 max-w-[220px] mx-auto">
-                  Der Bot ist bereit und verschickt E-Mails, sobald ein neues Match gefunden wird!
-                </p>
+              <div className="w-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 py-3 rounded-xl flex items-center justify-center gap-2 font-bold uppercase text-xs">
+                <CheckCircle className="h-4 w-4" />
+                Webhook ist verbunden
               </div>
             )}
 
