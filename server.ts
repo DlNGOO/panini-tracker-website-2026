@@ -457,15 +457,44 @@ async function startServer() {
     });
   });
 
-  // Route to trigger a bot message to the WhatsApp group
+  // Route to trigger a manual bot message to group members
   app.post("/api/groups/:id/bot-trigger", async (req, res) => {
     const { message } = req.body;
+    const groupId = req.params.id;
     if (!message) {
       return res.status(400).json({ error: "Nachricht ist erforderlich" });
     }
-    const { sendCustomWhatsAppMessage } = await import("./whatsapp-service");
-    const result = await sendCustomWhatsAppMessage(message);
-    res.json(result);
+    
+    const db = getDb();
+    const members = Object.values(db).filter(
+      (p: any) => p && p.groupId === groupId && p.email && !p.id.startsWith("_")
+    );
+    
+    let sentCount = 0;
+    
+    if (process.env.GOOGLE_MAIL_WEBHOOK) {
+      for (const member of members as any[]) {
+        try {
+          await fetch(process.env.GOOGLE_MAIL_WEBHOOK, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: member.email,
+              subject: "🚨 Manueller Panini Tausch-Alarm",
+              html: `<div style="font-family: sans-serif; padding: 20px;">
+                <h3>Neuer Hinweis aus deiner Gruppe:</h3>
+                <p style="background: #f3f4f6; padding: 15px; border-radius: 8px;">${message}</p>
+              </div>`
+            })
+          });
+          sentCount++;
+        } catch (e) {
+          console.error("Manual webhook alert failed for", member.email);
+        }
+      }
+    }
+    
+    res.json({ success: true, sentTo: sentCount });
   });
 
   // Delete a user profile
@@ -482,17 +511,7 @@ async function startServer() {
 
   // --- NEW TRADE MATCHMAKING & WHATSAPP NOTIFICATION ENDPOINTS ---
 
-  // Get sent notification logs
-  app.get("/api/notifications/logs", (req, res) => {
-    const locksDb = getLocksDb();
-    res.json(locksDb.logs || []);
-  });
-
-  // Reset anti-spam matchmaking locks & logs
-  app.post("/api/notifications/reset-locks", (req, res) => {
-    saveLocksDb({ locks: {}, logs: [] });
-    res.json({ success: true });
-  });
+  // Removed duplicate notification endpoints
 
   // Get current Mail bot status
   app.get("/api/notifications/bot-status", (req, res) => {
@@ -603,7 +622,7 @@ async function startServer() {
           // Matches a number optionally followed by multiplier like "(x2)", "(2)", "x2"
           // We can also just search numbers on the line
           const numMatches = line.matchAll(/\b(\d+)(?:\s*(?:x|\(|x\s*)(\d+)\)?)?\b/gi);
-          for (const match of numMatches) {
+          for (const match of Array.from(numMatches)) {
             const numVal = parseInt(match[1], 10);
             if (numVal >= 1 && numVal <= 20) {
               // Check if this number is associated with the country (not part of date or other texts)
