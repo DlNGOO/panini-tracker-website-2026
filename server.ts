@@ -6,8 +6,6 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { COUNTRIES, UserProfile } from "./src/types";
 import {
   runMatchmaking,
-  getLocksDb,
-  saveLocksDb,
   initializeMailBot,
   getMailBotStatus
 } from "./notification-service";
@@ -240,7 +238,7 @@ async function startServer() {
     saveDb(db);
     
     // Trigger intelligent trade matchmaking checks asynchronously
-    runMatchmaking(db, id).catch((err) => {
+    runMatchmaking(db, id, saveDb).catch((err) => {
       console.error("Error in matchmaking runner:", err);
     });
 
@@ -287,15 +285,15 @@ async function startServer() {
   });
 
   app.get("/api/notifications/logs", (req, res) => {
-    const locksDb = getLocksDb();
-    res.json(locksDb.logs || []);
+    const db = getDb();
+    res.json(db._notification_logs || []);
   });
 
   app.post("/api/notifications/reset-locks", (req, res) => {
-    const locksDb = getLocksDb();
-    locksDb.locks = {};
-    locksDb.logs = [];
-    saveLocksDb(locksDb);
+    const db = getDb();
+    db._notification_locks = {};
+    db._notification_logs = [];
+    saveDb(db);
     res.json({ success: true });
   });
 

@@ -3,8 +3,6 @@ import path from "path";
 import nodemailer from "nodemailer";
 import { UserProfile, COUNTRIES } from "./src/types";
 
-const locksPath = path.join(process.cwd(), "notification_locks.json");
-
 export interface NotificationLog {
   id: string;
   timestamp: string;
@@ -17,32 +15,6 @@ export interface NotificationLog {
   message: string;
   status: "sent" | "failed" | "simulated";
   details?: string;
-}
-
-interface LocksDb {
-  locks: Record<string, string>;
-  logs: NotificationLog[];
-}
-
-export function getLocksDb(): LocksDb {
-  try {
-    if (!fs.existsSync(locksPath)) {
-      return { locks: {}, logs: [] };
-    }
-    const data = fs.readFileSync(locksPath, "utf-8");
-    return JSON.parse(data);
-  } catch (err) {
-    console.error("Error reading locks database:", err);
-    return { locks: {}, logs: [] };
-  }
-}
-
-export function saveLocksDb(db: LocksDb) {
-  try {
-    fs.writeFileSync(locksPath, JSON.stringify(db, null, 2), "utf-8");
-  } catch (err) {
-    console.error("Error saving locks database:", err);
-  }
 }
 
 function getStickerDisplay(code: string): string {
@@ -90,11 +62,13 @@ export function getMailBotStatus() {
   };
 }
 
-export async function runMatchmaking(profiles: Record<string, UserProfile>, updatedUserId: string) {
-  const userA = profiles[updatedUserId.toLowerCase()];
+export async function runMatchmaking(db: any, updatedUserId: string, saveDbCallback: (db: any) => void) {
+  const userA = db[updatedUserId.toLowerCase()];
   if (!userA) return;
 
-  const db = getLocksDb();
+  if (!db._notification_locks) db._notification_locks = {};
+  if (!db._notification_logs) db._notification_logs = [];
+
   let hasChanges = false;
 
   const userADuplicates = Object.keys(userA.duplicates || {}).filter(
@@ -107,9 +81,10 @@ export async function runMatchmaking(profiles: Record<string, UserProfile>, upda
     await initializeMailBot();
   }
 
-  for (const otherId of Object.keys(profiles)) {
+  for (const otherId of Object.keys(db)) {
+    if (otherId.startsWith("_")) continue;
     if (otherId.toLowerCase() === updatedUserId.toLowerCase()) continue;
-    const userB = profiles[otherId];
+    const userB = db[otherId];
     if (!userB) continue;
     if (!userA.groupId || !userB.groupId || userA.groupId !== userB.groupId) continue;
 
@@ -120,9 +95,9 @@ export async function runMatchmaking(profiles: Record<string, UserProfile>, upda
 
       if (userBIsMissing) {
         const lockKey = `${userA.id}_to_${userB.id}_${stickerCode}`.toLowerCase();
-        if (db.locks[lockKey]) continue;
+        if (db._notification_locks[lockKey]) continue;
 
-        db.locks[lockKey] = new Date().toISOString();
+        db._notification_locks[lockKey] = new Date().toISOString();
         hasChanges = true;
 
         const stickerDisplay = getStickerDisplay(stickerCode);
@@ -200,12 +175,12 @@ export async function runMatchmaking(profiles: Record<string, UserProfile>, upda
           details,
         };
 
-        db.logs.unshift(logEntry);
+        db._notification_logs.unshift(logEntry);
       }
     }
   }
 
   if (hasChanges) {
-    saveLocksDb(db);
+    saveDbCallback(db);
   }
 }
