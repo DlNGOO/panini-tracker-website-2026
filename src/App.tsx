@@ -174,6 +174,7 @@ export default function App() {
                 p.id === verifiedUserId ? { ...p, groupId: joinData.group.id } : p
               );
               setProfiles(finalData);
+              setActiveTab("group");
               triggerSuccessToast(`Erfolgreich über Einladungslink der Gruppe "${joinData.group.name}" beigetreten!`);
               return; // skip the normal setProfiles since we did it above
             }
@@ -367,6 +368,7 @@ export default function App() {
             const joinData = await joinRes.json();
             if (joinRes.ok && joinData.success) {
               localStorage.removeItem("panini_pending_invite");
+              setActiveTab("group");
               triggerSuccessToast(`Erfolgreich Gruppe "${joinData.group.name}" beigetreten!`);
             }
           } catch (e) {
@@ -429,6 +431,7 @@ export default function App() {
           const joinData = await joinRes.json();
           if (joinRes.ok && joinData.success) {
             localStorage.removeItem("panini_pending_invite");
+            setActiveTab("group");
             triggerSuccessToast(`Konto erstellt und Gruppe "${joinData.group.name}" beigetreten!`);
           }
         } catch (e) {
