@@ -86,18 +86,12 @@ export default function App() {
       });
 
 
-      // Select the first user if current selection is not found, but only if they were logged in
+      // Force logout if current selection is not found in the database
       let verifiedUserId = selectedUserId;
       if (selectedUserId && selectedUserId !== "undefined" && !updatedData.some((p: UserProfile) => p.id === selectedUserId)) {
-        if (updatedData.length > 0) {
-          verifiedUserId = updatedData[0].id;
-          setSelectedUserId(verifiedUserId);
-          localStorage.setItem("panini_logged_in_user_id", verifiedUserId);
-        } else {
-          verifiedUserId = "";
-          setSelectedUserId("");
-          localStorage.removeItem("panini_logged_in_user_id");
-        }
+        verifiedUserId = "";
+        setSelectedUserId("");
+        localStorage.removeItem("panini_logged_in_user_id");
       }
 
       // Auto-join pending invite if we have a valid logged-in user
