@@ -1,0 +1,41 @@
+{
+  "_db_cleared_to_zero": true,
+  "_groups": {
+    "g-2b61ln": {
+      "id": "g-2b61ln",
+      "name": "Testgruppe",
+      "avatar": "🦁",
+      "inviteCode": "GWR5D3",
+      "createdBy": "test"
+    }
+  },
+  "test": {
+    "id": "test",
+    "name": "Test",
+    "password": "test123",
+    "avatar": "🦁",
+    "owned": [
+      "GER1",
+      "GER2",
+      "BIH6",
+      "BIH7"
+    ],
+    "duplicates": {},
+    "email": "test@test.com",
+    "phoneNumber": "+491701234567",
+    "notifyPreference": "both",
+    "groupId": "g-2b61ln"
+  },
+  "test2": {
+    "id": "test2",
+    "name": "Test2",
+    "password": "test123",
+    "avatar": "🦊",
+    "owned": [],
+    "duplicates": {},
+    "email": "test2@test.com",
+    "phoneNumber": "+491701234568",
+    "notifyPreference": "both",
+    "groupId": null
+  }
+}

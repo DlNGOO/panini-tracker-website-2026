@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Remix: Remix: Panini WM 2026 Sticker-Manager",
+  "description": "Eine App zur Verwaltung von Panini WM 2026 Stickern, zum Tracken der Sammlung und zum automatischen Finden von Tauschpartnern in der Gruppe.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
