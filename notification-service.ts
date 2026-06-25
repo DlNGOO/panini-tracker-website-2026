@@ -141,6 +141,18 @@ export async function runMatchmaking(db: any, updatedUserId: string, saveDbCallb
                 });
 
                 if (response.ok) {
+                  let result;
+                  try {
+                    result = await response.json();
+                  } catch (e) {
+                    // Fallback if not JSON
+                    result = { success: true }; 
+                  }
+                  
+                  if (result.success === false) {
+                    throw new Error(`Google Script Fehler: ${result.error || "Unbekannter Fehler"}`);
+                  }
+
                   status = "sent";
                   details = `E-Mail erfolgreich via Webhook an ${userB.email} gesendet.`;
                   notificationDetails.push(`📧 E-Mail gesendet`);
