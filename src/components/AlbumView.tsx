@@ -124,7 +124,7 @@ export default function AlbumView({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+        <div className="grid grid-cols-3 gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[10px] xl:text-xs">
           <button
             onClick={() => setFilterMode("all")}
             className={`py-1.5 rounded-lg font-medium transition-all ${filterMode === "all" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"}`}
@@ -135,7 +135,13 @@ export default function AlbumView({
             onClick={() => setFilterMode("missing")}
             className={`py-1.5 rounded-lg font-medium transition-all ${filterMode === "missing" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-400 hover:text-slate-200"}`}
           >
-            Fehlende
+            Fehlt
+          </button>
+          <button
+            onClick={() => setFilterMode("duplicates")}
+            className={`py-1.5 rounded-lg font-medium transition-all ${filterMode === "duplicates" ? "bg-rose-600 text-white shadow-sm" : "text-rose-400/70 hover:text-rose-300"}`}
+          >
+            Doppelt
           </button>
         </div>
 
