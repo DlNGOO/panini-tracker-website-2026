@@ -84,7 +84,7 @@ async function startServer() {
         await syncCloud();
       } else {
         if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
-        cloudSyncTimeout = setTimeout(syncCloud, 5000); // 5 second debounce
+        cloudSyncTimeout = setTimeout(syncCloud, 1000); // 1 second debounce
       }
     }
   }
