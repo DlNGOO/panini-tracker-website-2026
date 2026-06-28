@@ -231,7 +231,7 @@ async function startServer() {
   });
 
   // Update a user profile
-  app.post("/api/profiles/:id", (req, res) => {
+  app.post("/api/profiles/:id", async (req, res) => {
     const id = req.params.id.toLowerCase();
     const { name, avatar, owned, duplicates, email, phoneNumber, notifyPreference, groupId, password } = req.body;
 
@@ -252,7 +252,10 @@ async function startServer() {
     if (password !== undefined) existing.password = password;
 
     db[id] = existing;
-    saveDb(db);
+    // CRITICAL: await cloud sync with immediate=true so data is in the cloud
+    // before we respond. On Render, the local file is ephemeral and lost on
+    // restart — the cloud is the only reliable persistence layer.
+    await saveDb(db, true);
     
     // Trigger intelligent trade matchmaking checks asynchronously
     runMatchmaking(db, id, saveDb).catch((err) => {
