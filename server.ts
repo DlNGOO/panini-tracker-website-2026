@@ -382,7 +382,7 @@ async function startServer() {
       db[userId].groupId = group.id;
     }
     
-    saveDb(db, true);
+    await saveDb(db, true);
     res.json({ success: true, group, profile: db[userId] });
   });
 
@@ -511,12 +511,12 @@ async function startServer() {
   });
 
   // Delete a user profile
-  app.delete("/api/profiles/:id", (req, res) => {
+  app.delete("/api/profiles/:id", async (req, res) => {
     const id = req.params.id.toLowerCase();
     const db = getDb();
     if (db[id]) {
       delete db[id];
-      saveDb(db);
+      await saveDb(db, true);
       return res.json({ success: true });
     }
     res.status(404).json({ error: "Profile not found" });
