@@ -32,6 +32,14 @@ export default function AlbumView({
   const profileOwned = profile.owned || [];
   const profileDuplicates = profile.duplicates || {};
 
+  // Keep a local ref to the latest inventory to prevent race conditions during rapid clicks
+  const localInventoryRef = React.useRef({ owned: profileOwned, duplicates: profileDuplicates });
+
+  // Update ref when props change from server
+  React.useEffect(() => {
+    localInventoryRef.current = { owned: profile.owned || [], duplicates: profile.duplicates || {} };
+  }, [profile.owned, profile.duplicates]);
+
   const filteredCountryKeys = countriesKeys.filter((key) => {
     const c = COUNTRIES[key];
     return (
@@ -45,35 +53,47 @@ export default function AlbumView({
   // Toggle sticker owned status (add OR remove)
   const toggleOwned = (stickerCode: string) => {
     if (readonly) return;
-    const isOwned = profileOwned.includes(stickerCode);
-    let newOwned = [...profileOwned];
-    let newDuplicates = { ...profileDuplicates };
+    const currentOwned = localInventoryRef.current.owned;
+    const currentDuplicates = localInventoryRef.current.duplicates;
+    
+    const isOwned = currentOwned.includes(stickerCode);
+    let newOwned = [...currentOwned];
+    let newDuplicates = { ...currentDuplicates };
+    
     if (isOwned) {
       newOwned = newOwned.filter((code) => code !== stickerCode);
       delete newDuplicates[stickerCode];
     } else {
       newOwned.push(stickerCode);
     }
+    
+    localInventoryRef.current = { owned: newOwned, duplicates: newDuplicates };
     onUpdateInventory(newOwned, newDuplicates);
   };
 
   // Adjust duplicate count
   const adjustDuplicate = (stickerCode: string, amount: number) => {
     if (readonly) return;
-    const newDuplicates = { ...profileDuplicates };
+    const currentOwned = localInventoryRef.current.owned;
+    const currentDuplicates = localInventoryRef.current.duplicates;
+    
+    const newDuplicates = { ...currentDuplicates };
     const current = newDuplicates[stickerCode] || 0;
     const nextVal = current + amount;
+    
     if (nextVal <= 0) {
       delete newDuplicates[stickerCode];
     } else {
       newDuplicates[stickerCode] = nextVal;
-      if (!profileOwned.includes(stickerCode)) {
-        const nextOwned = [...profileOwned, stickerCode];
+      if (!currentOwned.includes(stickerCode)) {
+        const nextOwned = [...currentOwned, stickerCode];
+        localInventoryRef.current = { owned: nextOwned, duplicates: newDuplicates };
         onUpdateInventory(nextOwned, newDuplicates);
         return;
       }
     }
-    onUpdateInventory(profileOwned, newDuplicates);
+    localInventoryRef.current = { owned: currentOwned, duplicates: newDuplicates };
+    onUpdateInventory(currentOwned, newDuplicates);
   };
 
   // ── Sticker #1 (Wappen) gets golden shimmer ──
@@ -82,7 +102,7 @@ export default function AlbumView({
   // ── Double-click ALWAYS toggles (add if missing, remove if owned) ──
   const handleDoubleClick = useCallback((stickerCode: string) => {
     toggleOwned(stickerCode);
-  }, [profileOwned, profileDuplicates]);
+  }, []);
 
 
   // Derive border style based on duplicate count
