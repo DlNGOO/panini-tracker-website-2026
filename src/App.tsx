@@ -53,6 +53,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+  
+  const pendingUpdates = React.useRef(0);
 
   useEffect(() => {
     // Parse invite code from URL parameters
@@ -156,6 +158,8 @@ export default function App() {
       )
     );
 
+    pendingUpdates.current += 1;
+
     try {
       const response = await fetch(`/api/profiles/${activeProfile.id}`, {
         method: "POST",
@@ -169,17 +173,22 @@ export default function App() {
 
       const updated = await response.json();
       
-      // Update localStorage to match server canonical response to prevent sync loop
-      localStorage.setItem(`panini_owned_${activeProfile.id}`, JSON.stringify(updated.owned || []));
-      localStorage.setItem(`panini_duplicates_${activeProfile.id}`, JSON.stringify(updated.duplicates || {}));
+      pendingUpdates.current -= 1;
       
-      // Update local state with canonical server response
-      setProfiles((prev) =>
-        prev.map((p) => (p.id === activeProfile.id ? updated : p))
-      );
+      // Only overwrite local state with server state if no other clicks are pending.
+      // This prevents older server responses from overwriting newer local optimistic states!
+      if (pendingUpdates.current === 0) {
+        localStorage.setItem(`panini_owned_${activeProfile.id}`, JSON.stringify(updated.owned || []));
+        localStorage.setItem(`panini_duplicates_${activeProfile.id}`, JSON.stringify(updated.duplicates || {}));
+        
+        setProfiles((prev) =>
+          prev.map((p) => (p.id === activeProfile.id ? updated : p))
+        );
+      }
       
       // No success toast here — it was causing render loops and is too noisy for frequent sticker clicks
     } catch (err: any) {
+      pendingUpdates.current -= 1;
       console.error(err);
       setGlobalError("Sticker-Aktualisierung fehlgeschlagen.");
     }

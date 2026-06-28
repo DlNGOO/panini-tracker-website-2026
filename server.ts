@@ -44,7 +44,10 @@ async function startServer() {
 
   // Helper to save database
   let cloudSyncTimeout: NodeJS.Timeout | null = null;
+  let forceSyncCloud: (() => Promise<void>) | null = null;
+
   async function saveDb(data: Record<string, any>, immediate: boolean = false) {
+    data._lastUpdated = Date.now();
     memoryDb = data;
     // Local backup
     try {
@@ -74,6 +77,8 @@ async function startServer() {
         }
       };
 
+      forceSyncCloud = syncCloud;
+
       if (immediate) {
         if (cloudSyncTimeout) clearTimeout(cloudSyncTimeout);
         await syncCloud();
@@ -94,10 +99,31 @@ async function startServer() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data && data.record) {
-        memoryDb = data.record;
-        fs.writeFileSync(dbPath, JSON.stringify(memoryDb, null, 2), "utf-8");
-        console.log("Successfully synchronized DB from JSONBin cloud.");
-        cloudSyncEnabled = true; // Only enable saving to cloud if loading succeeded!
+        const cloudDb = data.record;
+        let localDb: any = null;
+        
+        if (fs.existsSync(dbPath)) {
+          try {
+            localDb = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
+          } catch (e) {
+            console.error("Local DB read error:", e);
+          }
+        }
+        
+        const cloudTime = cloudDb._lastUpdated || 0;
+        const localTime = (localDb && localDb._lastUpdated) || 0;
+        
+        if (localDb && localTime > cloudTime) {
+          console.log("Local DB is newer than Cloud DB! Prioritizing local state to prevent data loss.");
+          memoryDb = localDb;
+          cloudSyncEnabled = true; // enable cloud sync before saveDb so it pushes
+          await saveDb(memoryDb, true); // force push to cloud
+        } else {
+          console.log("Cloud DB is newer or equal. Synchronizing DB from JSONBin cloud.");
+          memoryDb = cloudDb;
+          fs.writeFileSync(dbPath, JSON.stringify(memoryDb, null, 2), "utf-8");
+          cloudSyncEnabled = true; // Only enable saving to cloud if loading succeeded!
+        }
       } else {
         throw new Error("Invalid JSONBin response structure");
       }
@@ -681,6 +707,18 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  const exitHandler = async () => {
+    if (cloudSyncTimeout && forceSyncCloud) {
+      console.log("Flushing data to cloud before exit...");
+      clearTimeout(cloudSyncTimeout);
+      await forceSyncCloud();
+      console.log("Flush complete.");
+    }
+    process.exit(0);
+  };
+  process.on('SIGINT', exitHandler);
+  process.on('SIGTERM', exitHandler);
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
