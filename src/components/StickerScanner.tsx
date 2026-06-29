@@ -29,6 +29,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [ocrStatus, setOcrStatus] = useState<string>("Kamera startet...");
+  const [debugOcrText, setDebugOcrText] = useState<string>("");
   
   // Track if scanner is active for requestAnimationFrame
   const isScanningRef = useRef(false);
@@ -127,23 +128,35 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                 if (isRecognizing || scannedCode || isManualMode) return; // wait for user interaction or current scan
                 
                 const video = videoRef.current;
+                const canvas = canvasRef.current;
                 // Ensure we have dimensions to draw
-                const w = video.videoWidth || video.clientWidth || 640;
-                const h = video.videoHeight || video.clientHeight || 480;
+                const w = video?.videoWidth || video?.clientWidth || 640;
+                const h = video?.videoHeight || video?.clientHeight || 480;
                 
-                if (w === 0 || h === 0) return;
+                if (w === 0 || h === 0 || !canvas) return;
 
-                // Draw FULL video to the hidden canvas
-                canvas.width = w;
-                canvas.height = h;
+                // Foolproof center-crop: Take the middle 50% of the video where the user holds the sticker
+                const cropW = w * 0.5;
+                const cropH = h * 0.5;
+                const cropX = (w - cropW) / 2;
+                const cropY = (h - cropH) / 2;
+
+                // Upscale by 1.5x to improve OCR accuracy for small text
+                canvas.width = cropW * 1.5;
+                canvas.height = cropH * 1.5;
                 const ctx = canvas.getContext("2d");
                 if (!ctx) return;
-                ctx.drawImage(video, 0, 0, w, h);
+                
+                // Draw cropped and upscaled video to canvas
+                ctx.drawImage(video!, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
                 
                 // Do OCR on the ENTIRE frame using SPARSE_TEXT (finds text anywhere)
                 try {
                   setIsRecognizing(true);
                   const { data } = await worker!.recognize(canvas);
+                  
+                  // Update debug text so user can see what Tesseract is seeing
+                  setDebugOcrText(data.text.replace(/\n/g, " ").trim().substring(0, 100));
                   
                   // Look for valid codes in the text
                   const code = extractStickerCode(data.text);
@@ -218,6 +231,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
     setIsManualMode(false);
     setManualCode("");
     setErrorMsg(null);
+    setDebugOcrText("");
     
     // Clear the debug canvas
     const debugCanvas = document.getElementById("debug-canvas") as HTMLCanvasElement;
@@ -308,8 +322,18 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
         {/* Debug Canvas: Shows exactly what Tesseract is seeing */}
         {!isManualMode && (
           <div className="absolute top-20 left-4 z-20 flex flex-col gap-1 pointer-events-none opacity-80">
-            <span className="text-[9px] text-white uppercase tracking-widest font-mono">Kamera-Feed:</span>
+            <span className="text-[9px] text-white uppercase tracking-widest font-mono">Scanner-Fokus:</span>
             <canvas id="debug-canvas" className="w-16 h-24 border border-indigo-500/50 rounded-lg bg-black shadow-2xl object-cover" />
+          </div>
+        )}
+        
+        {/* Debug OCR Text: Shows what text was extracted */}
+        {!isManualMode && (
+          <div className="absolute top-48 left-4 z-20 flex flex-col gap-1 pointer-events-none opacity-90 max-w-[150px]">
+            <span className="text-[9px] text-white uppercase tracking-widest font-mono">Gelesen:</span>
+            <div className="text-[10px] text-emerald-400 font-mono bg-black/80 p-2 rounded-lg min-h-[24px] break-words border border-white/10">
+              {debugOcrText || "Noch nichts..."}
+            </div>
           </div>
         )}
 
