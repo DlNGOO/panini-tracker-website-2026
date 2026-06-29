@@ -41,20 +41,25 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
     let worker: Tesseract.Worker | null = null;
     let scanInterval: ReturnType<typeof setInterval>;
     
-    // Validate string against known codes
-    const allKnownCodes = getAllStickerCodes();
+    // Sort codes by length descending so we match "GER10" before "GER1"
+    const allKnownCodes = getAllStickerCodes().sort((a, b) => b.length - a.length);
     
     // Format detected string into a possible sticker code
-    // E.g. "BIH 2" -> "BIH2", "GER 10" -> "GER10", "Fwc00" -> "FWC00"
     const extractStickerCode = (text: string): string | null => {
-      // Find possible patterns like 3 letters followed by numbers
-      const matches = text.toUpperCase().match(/[A-Z]{3}\s*\d{1,2}/g);
-      if (!matches) return null;
+      // Remove all spaces, punctuation, and newlines
+      let cleanText = text.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
       
-      for (const m of matches) {
-        const clean = m.replace(/\s+/g, "");
-        if (allKnownCodes.includes(clean)) {
-          return clean;
+      // Common OCR mistakes correction
+      cleanText = cleanText.replace(/0/g, "O").replace(/O/g, "0"); // Numbers vs Letters
+      // It's hard to safely replace 1/I/L globally, but let's just look for substring matches
+      
+      // Find the first (longest) code that is in the text
+      for (const code of allKnownCodes) {
+        // Tesseract sometimes sees 'O' instead of '0', so let's normalize the code we're looking for too
+        const normalizedCode = code.replace(/O/g, "0");
+        
+        if (cleanText.includes(normalizedCode)) {
+          return code;
         }
       }
       return null;
@@ -90,16 +95,28 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                 const reticleClientW = 224;
                 const reticleClientH = 288;
                 
-                const scaleX = video.videoWidth / video.clientWidth;
-                const scaleY = video.videoHeight / video.clientHeight;
+                // Account for object-cover scaling
+                const scale = Math.max(video.clientWidth / video.videoWidth, video.clientHeight / video.videoHeight);
                 
-                const reticleVideoW = reticleClientW * scaleX;
-                const reticleVideoH = reticleClientH * scaleY;
+                // Displayed size of the video (some parts might bleed off-screen)
+                const displayW = video.videoWidth * scale;
+                const displayH = video.videoHeight * scale;
                 
-                const reticleVideoX = (video.videoWidth - reticleVideoW) / 2;
-                const reticleVideoY = (video.videoHeight - reticleVideoH) / 2;
+                // Offset of the video relative to the container
+                const offsetX = (video.clientWidth - displayW) / 2;
+                const offsetY = (video.clientHeight - displayH) / 2;
                 
-                // Scale up the cropped area to improve OCR of small text
+                // Reticle is centered in the container
+                const reticleX = (video.clientWidth - reticleClientW) / 2;
+                const reticleY = (video.clientHeight - reticleClientH) / 2;
+                
+                // Map reticle coordinates back to the original video coordinates
+                const reticleVideoX = (reticleX - offsetX) / scale;
+                const reticleVideoY = (reticleY - offsetY) / scale;
+                const reticleVideoW = reticleClientW / scale;
+                const reticleVideoH = reticleClientH / scale;
+                
+                // Scale up the cropped area to improve OCR of small text (2x)
                 const scaleForOCR = 2;
                 canvas.width = reticleVideoW * scaleForOCR;
                 canvas.height = reticleVideoH * scaleForOCR;
@@ -190,13 +207,17 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
       const boxRealVideoX1 = (scannedBox.x1 / cropData.scale) + cropData.x;
       const boxRealVideoY1 = (scannedBox.y1 / cropData.scale) + cropData.y;
 
-      const scaleX = video.clientWidth / video.videoWidth;
-      const scaleY = video.clientHeight / video.videoHeight;
+      // Reverse the object-cover math to find client coordinates
+      const scale = Math.max(video.clientWidth / video.videoWidth, video.clientHeight / video.videoHeight);
+      const displayW = video.videoWidth * scale;
+      const displayH = video.videoHeight * scale;
+      const offsetX = (video.clientWidth - displayW) / 2;
+      const offsetY = (video.clientHeight - displayH) / 2;
       
-      const x = boxRealVideoX0 * scaleX;
-      const y = boxRealVideoY0 * scaleY;
-      const w = (boxRealVideoX1 - boxRealVideoX0) * scaleX;
-      const h = (boxRealVideoY1 - boxRealVideoY0) * scaleY;
+      const x = (boxRealVideoX0 * scale) + offsetX;
+      const y = (boxRealVideoY0 * scale) + offsetY;
+      const w = (boxRealVideoX1 - boxRealVideoX0) * scale;
+      const h = (boxRealVideoY1 - boxRealVideoY0) * scale;
       
       // Draw border
       ctx.strokeStyle = "#4ade80"; // emerald-400
