@@ -18,6 +18,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
   const [workerReady, setWorkerReady] = useState(false);
   const [status, setStatus] = useState<'idle'|'scanning'|'done'|'error'>('idle');
   const [capturedUrl, setCapturedUrl] = useState<string | null>(null);
+  const [debugCropUrl, setDebugCropUrl] = useState<string | null>(null);
   const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [ocrPreview, setOcrPreview]   = useState('');
   const [isManualMode, setIsManualMode] = useState(false);
@@ -87,7 +88,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
           langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
         });
         if (!alive) { w.terminate(); return; }
-        await w.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT });
+        await w.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK });
         workerRef.current = w;
         setWorkerReady(true);
       } catch { /* ignore */ }
@@ -246,7 +247,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
               initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
               className="flex flex-col items-center gap-5 w-full max-w-xs">
               <div className="relative w-full rounded-2xl overflow-hidden border border-white/10">
-                <img src={capturedUrl} alt="Foto" className="w-full object-cover" />
+                <img src={debugCropUrl || capturedUrl} alt="Foto" className="w-full object-contain bg-slate-900 max-h-48" />
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                   <div className="bg-black/80 rounded-xl px-5 py-4 text-center">
                     <div className="w-7 h-7 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
@@ -263,7 +264,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
               className="flex flex-col items-center gap-5 w-full max-w-xs">
               {capturedUrl && (
                 <div className="relative w-full rounded-2xl overflow-hidden border border-red-500/30">
-                  <img src={capturedUrl} alt="Foto" className="w-full object-cover opacity-60" />
+                  <img src={debugCropUrl || capturedUrl} alt="Foto" className="w-full object-contain bg-slate-900 max-h-48 opacity-60" />
                 </div>
               )}
               <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-4 text-center w-full">
@@ -295,7 +296,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
               className="flex flex-col items-center gap-5 w-full max-w-xs">
               {capturedUrl && (
                 <div className="relative w-full rounded-2xl overflow-hidden border-2 border-emerald-500/50">
-                  <img src={capturedUrl} alt="Foto" className="w-full object-cover" />
+                  <img src={debugCropUrl || capturedUrl} alt="Foto" className="w-full object-contain bg-slate-900 max-h-48" />
                 </div>
               )}
               {successMsg ? (
