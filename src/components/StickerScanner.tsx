@@ -111,27 +111,40 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
       img.src = url;
       await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; });
 
-      // NO CROPPING (to avoid EXIF rotation issues on iOS).
-      // Instead, we scale down the whole image to max 1200px and apply a high-contrast B&W filter
-      // so Tesseract can easily read the bright text on the dark sticker background.
-      const maxDim = 1200;
-      let w = img.naturalWidth;
-      let h = img.naturalHeight;
-      if (w > maxDim || h > maxDim) {
-        if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
-        else { w = Math.round((w * maxDim) / h); h = maxDim; }
+      // Step 1: Draw the image exactly as the browser renders it (respecting EXIF)
+      // We use a fixed maximum size to avoid memory crashes on huge phone photos
+      const MAX_SIZE = 1200;
+      let drawW = img.width || img.naturalWidth;
+      let drawH = img.height || img.naturalHeight;
+      
+      if (drawW > MAX_SIZE || drawH > MAX_SIZE) {
+        if (drawW > drawH) { drawH = Math.round((drawH * MAX_SIZE) / drawW); drawW = MAX_SIZE; }
+        else { drawW = Math.round((drawW * MAX_SIZE) / drawH); drawH = MAX_SIZE; }
       }
 
-      const processCanvas = document.createElement('canvas');
-      processCanvas.width = w;
-      processCanvas.height = h;
-      const ctx = processCanvas.getContext('2d')!;
-      
-      // High contrast and grayscale to make text pop
-      ctx.filter = 'grayscale(100%) invert(100%) contrast(300%) brightness(150%)';
-      ctx.drawImage(img, 0, 0, w, h);
+      const baseCanvas = document.createElement('canvas');
+      baseCanvas.width = drawW;
+      baseCanvas.height = drawH;
+      const baseCtx = baseCanvas.getContext('2d')!;
+      baseCtx.drawImage(img, 0, 0, drawW, drawH);
 
-      const blob = await new Promise<Blob>((res) => processCanvas.toBlob(b => res(b!), 'image/jpeg', 0.95));
+      // Step 2: CROP ONLY THE TOP RIGHT CORNER (User strictly requested this!)
+      // Right 40%, Top 30%
+      const cropW = Math.round(drawW * 0.45);
+      const cropH = Math.round(drawH * 0.35);
+      const cropX = drawW - cropW;
+      const cropY = 0;
+
+      const cropCanvas = document.createElement('canvas');
+      cropCanvas.width = cropW;
+      cropCanvas.height = cropH;
+      const cropCtx = cropCanvas.getContext('2d')!;
+
+      // Step 3: Apply filter: invert (because sticker code is white on dark), high contrast
+      cropCtx.filter = 'grayscale(100%) invert(100%) contrast(300%) brightness(150%)';
+      cropCtx.drawImage(baseCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+      const blob = await new Promise<Blob>((res) => cropCanvas.toBlob(b => res(b!), 'image/jpeg', 0.95));
       const { data } = await workerRef.current.recognize(blob);
 
       const rawText = data.text.replace(/\n/g, ' ').trim();
