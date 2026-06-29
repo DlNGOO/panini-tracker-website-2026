@@ -1,6 +1,11 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
+
+// CRITICAL FIX: Bypass strict TLS checks to allow JSONBin node-fetch to work reliably on Windows/certain Node environments
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { COUNTRIES, UserProfile } from "./src/types";
@@ -52,6 +57,16 @@ async function startServer() {
     // Local backup
     try {
       fs.writeFileSync(dbPath, JSON.stringify(data, null, 2), "utf-8");
+      
+      // Auto-rolling backups (keep one per hour)
+      const backupsDir = path.join(process.cwd(), "backups");
+      if (!fs.existsSync(backupsDir)) {
+          fs.mkdirSync(backupsDir);
+      }
+      const d = new Date();
+      const timestampStr = d.toISOString().replace(/[:.]/g, "-").substring(0, 13); // e.g. "2026-06-29T10"
+      const backupPath = path.join(backupsDir, `sticker_db_${timestampStr}.json`);
+      fs.writeFileSync(backupPath, JSON.stringify(data, null, 2), "utf-8");
     } catch (err) {
       console.error("Error saving local db file:", err);
     }
@@ -252,10 +267,9 @@ async function startServer() {
     if (password !== undefined) existing.password = password;
 
     db[id] = existing;
-    // CRITICAL: await cloud sync with immediate=true so data is in the cloud
-    // before we respond. On Render, the local file is ephemeral and lost on
-    // restart — the cloud is the only reliable persistence layer.
-    await saveDb(db, true);
+    // We must NOT use immediate=true for profile updates because users click many stickers quickly.
+    // This triggers JSONBin rate limits and causes data loss. We rely on the debounce instead!
+    await saveDb(db, false);
     
     // Trigger intelligent trade matchmaking checks asynchronously
     runMatchmaking(db, id, saveDb).catch((err) => {
@@ -706,6 +720,29 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
+    app.get("/api/backup/download", (req, res) => {
+      try {
+        const backupsDir = path.join(process.cwd(), "backups");
+        if (!fs.existsSync(backupsDir)) {
+          return res.status(404).send("No backups available yet.");
+        }
+        
+        const files = fs.readdirSync(backupsDir)
+                        .filter(f => f.startsWith("sticker_db_"))
+                        .sort(); // Sorting by name will give chronological order
+        if (files.length === 0) {
+           return res.status(404).send("No backups available yet.");
+        }
+        
+        const latestBackup = files[files.length - 1];
+        const backupPath = path.join(backupsDir, latestBackup);
+        res.download(backupPath, latestBackup);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send("Internal Server Error fetching backup");
+      }
+    });
+
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });

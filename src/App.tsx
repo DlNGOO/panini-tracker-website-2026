@@ -705,10 +705,13 @@ export default function App() {
           <div>
             <span className="font-semibold text-slate-500">Panini WM 2026 Sticker-Manager</span> • Entwickelt für Benny, Hassan, Jonas & Oliver
           </div>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-4 items-center">
             <span>⚽ Ein Stück Kindheit</span>
             <span>🧱 Lego-Investments rules</span>
-            <span>🐐 Messi ist eingeklebt</span>
+            <a href="/api/backup/download" target="_blank" rel="noreferrer" className="text-indigo-400 hover:text-indigo-300 sm:border-l border-slate-800 sm:pl-4 transition-colors flex items-center gap-1 font-medium bg-slate-900/50 px-3 py-1 rounded-full">
+              <Database className="h-3 w-3" />
+              Backup Herunterladen
+            </a>
           </div>
         </div>
       </footer>

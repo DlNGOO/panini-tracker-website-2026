@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { COUNTRIES, STICKERS_PER_TEAM, UserProfile } from "../types";
+import { COUNTRIES, STICKERS_PER_TEAM, UserProfile, getStickersForCountry } from "../types";
 import { Check, Plus, Minus, Search, X, ZoomIn, Info, List } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { getStickerName, getStickerImageUrl, getCountryFlagUrl } from "../playerData";
@@ -190,7 +190,7 @@ export default function AlbumView({
           </button>
           {filteredCountryKeys.map((key) => {
             const country = COUNTRIES[key];
-            const countryStickers = Array.from({ length: STICKERS_PER_TEAM }, (_, i) => `${key}${i + 1}`);
+            const countryStickers = getStickersForCountry(key);
             const ownedInCountry = countryStickers.filter((code) => profileOwned.includes(code)).length;
             const progressPct = Math.round((ownedInCountry / STICKERS_PER_TEAM) * 100);
             return (
@@ -290,13 +290,13 @@ export default function AlbumView({
                 <div className="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800 text-center min-w-[80px]">
                   <div className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Gesammelt</div>
                   <div className="text-lg font-bold text-emerald-400 font-mono">
-                    {Array.from({ length: STICKERS_PER_TEAM }).filter((_, i) => profileOwned.includes(`${selectedCountryKey}${i + 1}`)).length}
+                    {getStickersForCountry(selectedCountryKey).filter((code) => profileOwned.includes(code)).length}
                   </div>
                 </div>
                 <div className="bg-slate-950 px-4 py-2.5 rounded-xl border border-slate-800 text-center min-w-[80px]">
                   <div className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Doppelt</div>
                   <div className="text-lg font-bold text-rose-400 font-mono">
-                    {Array.from({ length: STICKERS_PER_TEAM }).reduce<number>((acc, _, i) => acc + (profileDuplicates[`${selectedCountryKey}${i + 1}`] || 0), 0)}
+                    {getStickersForCountry(selectedCountryKey).reduce<number>((acc, code) => acc + (profileDuplicates[code] || 0), 0)}
                   </div>
                 </div>
               </>
@@ -325,7 +325,7 @@ export default function AlbumView({
                 return numA - numB;
               });
             } else {
-              stickersToRender = Array.from({ length: STICKERS_PER_TEAM }).map((_, idx) => `${selectedCountryKey}${idx + 1}`);
+              stickersToRender = getStickersForCountry(selectedCountryKey);
             }
 
             return stickersToRender.map((stickerCode) => {

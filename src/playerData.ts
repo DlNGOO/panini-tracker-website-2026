@@ -8,6 +8,7 @@
 
 export const PLAYER_NAMES: Record<string, string[]> = {
   FWC: [
+    "Panini-Logo",
     "Offizielles Emblem",
     "Offizielles Emblem",
     "Offizielle Maskottchen",
@@ -1119,6 +1120,11 @@ export function getStickerImageUrl(code: string): string | null {
   if (!match) return null;
   const country = match[1];
   const num = parseInt(match[2], 10);
+  
+  if (country === "FWC" && match[2] === "00") {
+    return `/stickers/FWC00.jpg`;
+  }
+  
   const paddedNum = String(num).padStart(3, "0");
   // File is named e.g. "#GER001.webp" — the # is URL-encoded as %23
   return `/stickers/%23${country}${paddedNum}.webp`;

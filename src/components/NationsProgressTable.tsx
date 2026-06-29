@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { COUNTRIES, STICKERS_PER_TEAM, UserProfile } from "../types";
+import { COUNTRIES, STICKERS_PER_TEAM, UserProfile, getStickersForCountry } from "../types";
 import { Search, ArrowUpDown, CheckCircle, HelpCircle, AlertCircle, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
 import { getCountryFlagUrl } from "../playerData";
@@ -43,7 +43,7 @@ export default function NationsProgressTable({ profile, onSelectCountry }: Natio
     const profileDuplicates = profile.duplicates || {};
 
     // Get all sticker codes for this country
-    const countryStickers = Array.from({ length: STICKERS_PER_TEAM }, (_, i) => `${key}${i + 1}`);
+    const countryStickers = getStickersForCountry(key);
     const ownedCount = countryStickers.filter((code) => profileOwned.includes(code)).length;
     const missingCount = STICKERS_PER_TEAM - ownedCount;
     

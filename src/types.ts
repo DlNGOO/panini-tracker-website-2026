@@ -108,27 +108,42 @@ export const COUNTRIES: Record<string, { name: string; flag: string; group: stri
   PAN: { name: "Panama", flag: "🇵🇦", group: "L" },
 };
 
+export const STICKERS_PER_TEAM = 20;
+
+export function getStickersForCountry(countryKey: string): string[] {
+  if (countryKey === "FWC") {
+    // FWC has FWC00 and FWC1 to FWC19
+    return ["FWC00", ...Array.from({ length: 19 }, (_, i) => `FWC${i + 1}`)];
+  }
+  return Array.from({ length: STICKERS_PER_TEAM }, (_, i) => `${countryKey}${i + 1}`);
+}
+
 // Returns sticker info if code is valid, e.g. "GER10" -> { country: "GER", num: 10 }
+// Now supports FWC00
 export function parseStickerCode(code: string): { country: string; num: number } | null {
   const match = code.trim().toUpperCase().match(/^([A-Z]{3})([0-9]+)$/);
   if (!match) return null;
   const country = match[1];
   const num = parseInt(match[2], 10);
-  if (COUNTRIES[country] && num >= 1 && num <= 20) {
+  
+  if (!COUNTRIES[country]) return null;
+  
+  if (country === "FWC") {
+    if (match[2] === "00" || (num >= 1 && num <= 19)) {
+      return { country, num }; // num will be 0 for "00"
+    }
+  } else if (num >= 1 && num <= STICKERS_PER_TEAM) {
     return { country, num };
   }
+  
   return null;
 }
-
-export const STICKERS_PER_TEAM = 20;
 
 // Simple helper to generate all sticker codes in album
 export function getAllStickerCodes(): string[] {
   const codes: string[] = [];
   for (const country of Object.keys(COUNTRIES)) {
-    for (let i = 1; i <= STICKERS_PER_TEAM; i++) {
-      codes.push(`${country}${i}`);
-    }
+    codes.push(...getStickersForCountry(country));
   }
   return codes;
 }
