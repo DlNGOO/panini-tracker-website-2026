@@ -31,7 +31,7 @@ import { motion, AnimatePresence } from "motion/react";
 export default function App() {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>(() => {
-    const RESET_VERSION = "panini_reset_v4";
+    const RESET_VERSION = "panini_reset_v3";
     if (!localStorage.getItem(RESET_VERSION)) {
       // Clear all panini keys to force logout and clear sticker cache
       const keysToRemove: string[] = [];
