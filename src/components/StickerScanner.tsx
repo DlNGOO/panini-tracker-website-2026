@@ -28,6 +28,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
   const [manualCode, setManualCode] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [ocrStatus, setOcrStatus] = useState<string>("Initialisiere...");
 
   // Stop media tracks when component unmounts
   const stopMediaTracks = () => {
@@ -83,8 +84,21 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
               videoRef.current.play();
               setIsLoading(false);
               
-              // Init Tesseract
-              worker = await createWorker('eng');
+              // Init Tesseract with logger to track progress
+              worker = await createWorker('eng', 1, {
+                logger: m => {
+                  if (m.status === "recognizing text") {
+                    setOcrStatus(`Analysiere... ${Math.round(m.progress * 100)}%`);
+                  } else {
+                    // Translate common Tesseract statuses to German
+                    let statusDe = m.status;
+                    if (m.status.includes("loading")) statusDe = "Lade Scanner-Engine...";
+                    if (m.status.includes("initializing")) statusDe = "Starte Scanner...";
+                    if (m.status.includes("downloading")) statusDe = "Lade Sprachmodell...";
+                    setOcrStatus(statusDe);
+                  }
+                }
+              });
               await worker.setParameters({
                 tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT
               });
@@ -130,17 +144,17 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                 const reticleVideoW = Math.min(vw - reticleVideoX, reticleClientW / scale);
                 const reticleVideoH = Math.min(vh - reticleVideoY, reticleClientH / scale);
                 
-                // Show the cropped image in the debug canvas
+                // Show the cropped image in the debug canvas (guaranteed to render something)
                 const debugCanvas = document.getElementById("debug-canvas") as HTMLCanvasElement;
                 if (debugCanvas) {
-                   debugCanvas.width = reticleVideoW;
-                   debugCanvas.height = reticleVideoH;
+                   debugCanvas.width = reticleVideoW || 100;
+                   debugCanvas.height = reticleVideoH || 100;
                    const debugCtx = debugCanvas.getContext("2d");
                    if (debugCtx) {
                       debugCtx.drawImage(
-                        canvas, 
-                        reticleVideoX, reticleVideoY, reticleVideoW, reticleVideoH, 
-                        0, 0, reticleVideoW, reticleVideoH
+                        video, // Draw directly from video to debug canvas to bypass hidden canvas issues
+                        reticleVideoX || 0, reticleVideoY || 0, reticleVideoW || 100, reticleVideoH || 100, 
+                        0, 0, debugCanvas.width, debugCanvas.height
                       );
                    }
                 }
@@ -391,10 +405,11 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
           </div>
         )}
 
-        {/* Scanning Indicator */}
-        {isRecognizing && !scannedCode && (
-           <div className="absolute top-24 right-4 bg-indigo-600/80 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 z-20">
-             <div className="w-2 h-2 bg-white rounded-full animate-ping"></div> Scanne...
+        {/* Scanning Indicator / Logger */}
+        {!scannedCode && (
+           <div className="absolute top-24 right-4 bg-indigo-600/90 backdrop-blur-md px-4 py-2 rounded-xl text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 z-20 shadow-xl border border-indigo-500/50 max-w-[200px] text-right">
+             <div className="w-2 h-2 bg-white rounded-full animate-ping flex-shrink-0"></div> 
+             <span className="truncate">{ocrStatus}</span>
            </div>
         )}
       </div>
