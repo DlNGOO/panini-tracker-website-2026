@@ -1,9 +1,8 @@
 import React, { useState } from "react";
-import { COUNTRIES, STICKERS_PER_TEAM, UserProfile, getStickersForCountry } from "../types";
+import { COUNTRIES, STICKERS_PER_TEAM, UserProfile, getStickersForCountry, getAllStickerCodes } from "../types";
 import { Search, ArrowUpDown, CheckCircle, HelpCircle, AlertCircle, Sparkles } from "lucide-react";
 import { motion } from "motion/react";
-import { getCountryFlagUrl } from "../playerData";
-
+import { getCountryFlagUrl, getStickerHighlights } from "../playerData";
 
 interface NationsProgressTableProps {
   profile: UserProfile;
@@ -118,6 +117,14 @@ export default function NationsProgressTable({ profile, onSelectCountry }: Natio
   const totalDuplicates = Object.values(profile.duplicates || {}).reduce((acc, count) => acc + count, 0);
   const totalProgressPct = ((totalOwned / totalStickers) * 100).toFixed(1);
 
+  // Compute Highlights
+  const allCodes = getAllStickerCodes();
+  const allFoilCodes = allCodes.filter(c => getStickerHighlights(c).includes("fwc_foil"));
+  const allStarCodes = allCodes.filter(c => getStickerHighlights(c).includes("star_player"));
+  
+  const ownedFoil = allFoilCodes.filter(c => (profile.owned || []).includes(c)).length;
+  const ownedStar = allStarCodes.filter(c => (profile.owned || []).includes(c)).length;
+
   return (
     <div className="flex flex-col gap-6" id="nations-progress-table-root">
       
@@ -157,6 +164,31 @@ export default function NationsProgressTable({ profile, onSelectCountry }: Natio
               style={{ width: `${totalProgressPct}%` }}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Highlights Dashboard */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-slate-900 border border-amber-500/30 rounded-2xl p-4 flex flex-col justify-between shadow-[0_0_15px_rgba(251,191,36,0.1)] relative overflow-hidden">
+          <div className="absolute -right-4 -top-4 text-6xl opacity-10">★</div>
+          <div className="text-[10px] text-amber-500/80 uppercase font-bold tracking-wider flex items-center gap-1.5 z-10">
+            Foil-Specials
+          </div>
+          <div className="text-2xl font-black font-mono text-amber-400 mt-2 z-10">
+            {ownedFoil} <span className="text-sm text-slate-500 font-normal">/ {allFoilCodes.length}</span>
+          </div>
+          <div className="text-[10px] text-amber-500/60 font-mono mt-1 z-10">gesammelt</div>
+        </div>
+
+        <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-4 flex flex-col justify-between shadow-[0_0_15px_rgba(244,63,94,0.1)] relative overflow-hidden">
+          <div className="absolute -right-4 -top-4 text-6xl opacity-10">⚡</div>
+          <div className="text-[10px] text-rose-500/80 uppercase font-bold tracking-wider flex items-center gap-1.5 z-10">
+            Star-Spieler
+          </div>
+          <div className="text-2xl font-black font-mono text-rose-400 mt-2 z-10">
+            {ownedStar} <span className="text-sm text-slate-500 font-normal">/ {allStarCodes.length}</span>
+          </div>
+          <div className="text-[10px] text-rose-500/60 font-mono mt-1 z-10">gesammelt</div>
         </div>
       </div>
 

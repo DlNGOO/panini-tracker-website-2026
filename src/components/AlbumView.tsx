@@ -2,8 +2,7 @@ import React, { useState, useCallback } from "react";
 import { COUNTRIES, STICKERS_PER_TEAM, UserProfile, getStickersForCountry } from "../types";
 import { Check, Plus, Minus, Search, X, ZoomIn, Info, List } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { getStickerName, getStickerImageUrl, getCountryFlagUrl } from "../playerData";
-
+import { getStickerName, getStickerImageUrl, getCountryFlagUrl, getStickerHighlights } from "../playerData";
 interface AlbumViewProps {
   profile: UserProfile;
   onUpdateInventory: (owned: string[], duplicates: Record<string, number>) => void;
@@ -24,7 +23,7 @@ export default function AlbumView({
   const setSelectedCountryKey = propSetSelectedCountryKey || setLocalSelectedCountryKey;
 
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [filterMode, setFilterMode] = useState<"all" | "missing" | "owned" | "duplicates">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "missing" | "owned" | "duplicates" | "highlights">("all");
   const [displayMode, setDisplayMode] = useState<"image" | "compact">("image");
   const [lightboxCode, setLightboxCode] = useState<string | null>(null);
 
@@ -163,6 +162,12 @@ export default function AlbumView({
             className={`py-1.5 rounded-lg font-medium transition-all ${filterMode === "duplicates" ? "bg-rose-600 text-white shadow-sm" : "text-rose-400/70 hover:text-rose-300"}`}
           >
             Doppelt
+          </button>
+          <button
+            onClick={() => setFilterMode("highlights")}
+            className={`py-1.5 rounded-lg font-medium transition-all ${filterMode === "highlights" ? "bg-amber-500 text-white shadow-sm" : "text-amber-400/70 hover:text-amber-300"}`}
+          >
+            Highlights
           </button>
         </div>
 
@@ -335,10 +340,12 @@ export default function AlbumView({
               const duplicateCount = profileDuplicates[stickerCode] || 0;
               const shiny = isShinySticker(num);
               const imgUrl = getStickerImageUrl(stickerCode);
+              const highlights = getStickerHighlights(stickerCode);
 
               if (filterMode === "missing" && owned) return null;
               if (filterMode === "owned" && !owned) return null;
               if (filterMode === "duplicates" && duplicateCount === 0) return null;
+              if (filterMode === "highlights" && highlights.length === 0) return null;
 
               if (displayMode === "compact") {
                 let compactColors = "border-slate-700 bg-slate-950/60 text-slate-500 border-dashed";
@@ -363,10 +370,11 @@ export default function AlbumView({
                 );
               }
 
-            // ── Border class logic ──
-            // Priority: duplicate color > owned-default > unowned
             let borderClass = "";
             let shadowClass = "";
+            let isFoil = highlights.includes("fwc_foil");
+            let isStar = highlights.includes("star_player");
+            
             if (owned) {
               if (duplicateCount === 1) {
                 borderClass = "border-rose-400";
@@ -374,6 +382,12 @@ export default function AlbumView({
               } else if (duplicateCount > 1) {
                 borderClass = "border-red-700";
                 shadowClass = "shadow-[0_0_18px_rgba(185,28,28,0.7)]";
+              } else if (isFoil) {
+                borderClass = "border-amber-400/90 ring-1 ring-amber-400";
+                shadowClass = "shadow-[0_0_15px_rgba(251,191,36,0.5)]";
+              } else if (isStar) {
+                borderClass = "border-rose-500/90 ring-1 ring-rose-500";
+                shadowClass = "shadow-[0_0_15px_rgba(244,63,94,0.5)]";
               } else if (shiny) {
                 borderClass = "border-amber-500/80";
                 shadowClass = "shadow-[0_0_20px_rgba(245,158,11,0.25)]";
@@ -418,10 +432,24 @@ export default function AlbumView({
 
                     {/* Top overlay strip */}
                     <div className="absolute top-0 inset-x-0 flex items-start justify-between p-1.5 z-20">
-                      <span className="font-mono text-[8px] font-bold text-white/80 bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded-md">
-                        {stickerCode}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-mono text-[8px] font-bold text-white/80 bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded-md self-start">
+                          {stickerCode}
+                        </span>
+                      </div>
                       <div className="flex gap-1 items-center">
+                        <div className="flex gap-0.5 mr-0.5">
+                          {isFoil && (
+                            <span className="text-[10px] bg-amber-500/80 border border-amber-400 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg" title="Foil Special">
+                              ★
+                            </span>
+                          )}
+                          {isStar && (
+                            <span className="text-[10px] bg-rose-600/80 border border-rose-500 text-white rounded-full w-4 h-4 flex items-center justify-center shadow-lg" title="Star Player">
+                              ⚡
+                            </span>
+                          )}
+                        </div>
                         {duplicateCount > 0 && (
                           <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md ${
                             duplicateCount > 1 ? "bg-red-700/90 text-white" : "bg-rose-400/90 text-white"

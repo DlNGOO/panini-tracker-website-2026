@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
-import { UserProfile } from "../types";
+import { UserProfile, getAllStickerCodes, parseStickerCode, COUNTRIES } from "../types";
 import Avatar from "./Avatar";
+import { getStickerName, getStickerHighlights } from "../playerData";
 import { 
   User, 
   Mail, 
@@ -14,7 +15,9 @@ import {
   Sparkles, 
   Check, 
   Camera,
-  AlertCircle
+  Camera,
+  AlertCircle,
+  Download
 } from "lucide-react";
 import { motion } from "motion/react";
 
@@ -121,6 +124,35 @@ export default function ProfileView({
     } catch (err: any) {
       setError(err.message || "Fehler beim Speichern des Profils.");
     }
+  };
+
+  const handleExportCSV = () => {
+    const codes = getAllStickerCodes();
+    let csvContent = "Code,Nation,Spieler/Name,Status,Doppelt,Highlight\n";
+
+    codes.forEach((code) => {
+      const parsed = parseStickerCode(code);
+      if (!parsed) return;
+      const nationName = COUNTRIES[parsed.country]?.name || parsed.country;
+      const stickerName = getStickerName(code).replace(/,/g, " "); // remove commas
+      const isOwned = profile.owned?.includes(code) ? "Eingeklebt" : "Fehlt";
+      const duplicates = profile.duplicates?.[code] || 0;
+      
+      const highlights = getStickerHighlights(code);
+      const highlightStr = highlights.join(" + ");
+      
+      csvContent += `${code},${nationName},${stickerName},${isOwned},${duplicates},${highlightStr}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `panini_export_${profile.name}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -428,14 +460,24 @@ export default function ProfileView({
             </div>
           )}
 
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full sm:w-auto self-end bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-850 disabled:text-slate-600 font-black text-xs uppercase px-6 py-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg"
-          >
-            <Save className="h-4 w-4" /> Profil speichern
-          </button>
+          {/* Actions */}
+          <div className="flex flex-col sm:flex-row justify-end items-center gap-3">
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 font-bold text-xs px-5 py-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 text-slate-300 border border-slate-700"
+            >
+              <Download className="h-4 w-4" /> Als CSV Exportieren
+            </button>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-850 disabled:text-slate-600 font-black text-xs uppercase px-6 py-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg"
+            >
+              <Save className="h-4 w-4" /> Profil speichern
+            </button>
+          </div>
         </div>
 
       </form>

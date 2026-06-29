@@ -1157,3 +1157,34 @@ export function getCountryFlagUrl(countryCode: string): string {
   if (iso) return `https://flagcdn.com/w80/${iso}.png`;
   return "https://flagcdn.com/w80/un.png";
 }
+
+export const STAR_PLAYERS_KEYWORDS = [
+  "lionel messi", "cristiano ronaldo", "kylian mbappe", "lamine yamal",
+  "erling haaland", "jude bellingham", "harry kane", "vinicius junior",
+  "jamal musiala", "florian wirtz", "pedri", "mohamed salah", "heung-min son",
+  "luka modric", "christian pulisic", "martin odegaard", "joshua kimmich",
+  "ousmane dembele"
+];
+
+export const STAR_PLAYERS_FALLBACK_IDS = [
+  "ARG17", "ESP15", "ESP11", "FRA20", "FRA15", "ENG11", "ENG18", "GER15", "GER11",
+  "GER10", "NOR15", "NOR10"
+];
+
+export function getStickerHighlights(code: string): ("fwc_foil" | "star_player")[] {
+  const highlights: ("fwc_foil" | "star_player")[] = [];
+  
+  if (code === "FWC00" || (code.startsWith("FWC") && parseInt(code.replace("FWC", ""), 10) >= 1 && parseInt(code.replace("FWC", ""), 10) <= 8)) {
+    highlights.push("fwc_foil");
+  }
+
+  const name = getStickerName(code).toLowerCase();
+  const isStarByName = STAR_PLAYERS_KEYWORDS.some(kw => name.includes(kw));
+  const isStarById = STAR_PLAYERS_FALLBACK_IDS.includes(code.toUpperCase());
+
+  if (isStarByName || isStarById) {
+    highlights.push("star_player");
+  }
+
+  return highlights;
+}
