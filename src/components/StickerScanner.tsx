@@ -27,43 +27,53 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
 
   const allKnownCodes = getAllStickerCodes().sort((a, b) => b.length - a.length);
 
-    const extractCode = (rawText: string): string | null => {
+      const extractCode = (rawText: string): string | null => {
     let upper = rawText.toUpperCase();
     
-    // Tesseract often reads '1' as 'I' or 'l' or '|' when it's next to letters.
-    // e.g. "SUI I", "GER l", "FRA |"
-    upper = upper.replace(/([A-Z]{3})\s*[IL|]/g, '$1 1');
-    upper = upper.replace(/([A-Z]{3})\s*O/g, '$1 0');
+    // Fix common OCR errors where '1' or '0' is misread as letters AFTER a country code
+    upper = upper.replace(/([A-Z]{2,4})\s*[IL|]/g, '$1 1');
+    upper = upper.replace(/([A-Z]{2,4})\s*O/g, '$1 0');
     
+    // Keep only letters, numbers, and spaces
     upper = upper.replace(/[^A-Z0-9\n ]/g, ' ');
 
-    const patternRegex = /\b([A-Z]{2,4})\s*(\d{1,2})\b/g;
+    // 1. Strict Regex: requires word boundaries (prevents PANINI -> PAN1N1 -> matching PAN1)
+    const strictRegex = /\b([A-Z]{2,4})\s*(\d{1,2})\b/g;
     const candidates: string[] = [];
     let m: RegExpExecArray | null;
-    while ((m = patternRegex.exec(upper)) !== null) {
-      candidates.push(m[1] + m[2]);
+    while ((m = strictRegex.exec(upper)) !== null) {
+      candidates.push((m[1] + m[2]).replace(/\s/g, ''));
     }
+
+    // 2. Loose Regex: if strict failed, try without boundaries, but CAREFUL with PAN1
+    if (candidates.length === 0) {
+      const looseRegex = /([A-Z]{2,4})\s*(\d{1,2})/g;
+      while ((m = looseRegex.exec(upper)) !== null) {
+        candidates.push((m[1] + m[2]).replace(/\s/g, ''));
+      }
+    }
+
+    // Validate candidates against the database of all known codes
+    const validMatches: string[] = [];
     for (const candidate of candidates) {
-      const compact = candidate.replace(/\s/g, '');
-      for (const code of allKnownCodes) {
-        if (code.toUpperCase().replace(/\s/g, '') === compact) return code;
+      for (const known of allKnownCodes) {
+        if (known.toUpperCase().replace(/\s/g, '') === candidate) {
+          validMatches.push(known);
+          break;
+        }
       }
     }
-    const tokens = upper.split(/\s+/).filter(t => t.length > 0);
-    for (const code of allKnownCodes) {
-      const c = code.toUpperCase().replace(/\s/g, '');
-      if (tokens.includes(c)) return code;
-      for (let i = 0; i < tokens.length - 1; i++) {
-        if (tokens[i] + tokens[i + 1] === c) return code;
+
+    if (validMatches.length > 0) {
+      // MASSIVE FIX: The word "PANINI" is printed on the bottom of EVERY sticker.
+      // If the OCR reads "PANINI" as "PAN1N1", it might trigger the code "PAN 1".
+      // We filter out PAN1 if another valid code (like SUI 1) was also found.
+      const withoutPan = validMatches.filter(c => c.replace(/\s/g, '') !== 'PAN1');
+      if (withoutPan.length > 0) {
+        return withoutPan[0]; 
       }
-    }
-    
-    // Final fallback: just look if the exact code without spaces appears anywhere in the raw text without spaces
-    const noSpaceText = upper.replace(/\s/g, '');
-    for (const code of allKnownCodes) {
-      const c = code.toUpperCase().replace(/\s/g, '');
-      // Only do this for codes that have numbers, to avoid matching "GER" by accident
-      if (c.length >= 4 && noSpaceText.includes(c)) return code;
+      // If ONLY PAN 1 was found, we return it (but only if strict regex matched, to be safe)
+      return validMatches[0];
     }
 
     return null;
