@@ -6,6 +6,7 @@ import StatsDashboard from "./components/StatsDashboard";
 import NationsProgressTable from "./components/NationsProgressTable";
 import NotificationTray from "./components/NotificationTray";
 import StickerScanner from "./components/StickerScanner";
+import ManualStickerAdd from "./components/ManualStickerAdd";
 import NotificationBotCenter from "./components/NotificationBotCenter";
 import LoginScreen from "./components/LoginScreen";
 import ProfileView from "./components/ProfileView";
@@ -26,12 +27,14 @@ import {
   Table,
   MessageSquare,
   User,
-  Camera
+  Camera,
+  Edit2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function App() {
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [isManualAddOpen, setIsManualAddOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>(() => {
     const RESET_VERSION = "panini_reset_v3";
     if (!localStorage.getItem(RESET_VERSION)) {
@@ -539,6 +542,15 @@ export default function App() {
             >
               <Camera className="h-5 w-5" />
             </button>
+            {activeProfile && (
+              <button
+                onClick={() => setIsManualAddOpen(true)}
+                className="relative p-2 rounded-xl transition-all cursor-pointer bg-slate-950 border border-slate-800 text-slate-400 hover:text-emerald-400 hover:border-emerald-500/50"
+                title="Sticker manuell eintragen"
+              >
+                <Edit2 className="h-5 w-5" />
+              </button>
+            )}
             <NotificationTray
               profiles={profiles}
               onExecuteTrade={handleExecuteTrade}
@@ -732,6 +744,15 @@ export default function App() {
           profile={activeProfile}
           onUpdateInventory={handleUpdateInventory}
           onClose={() => setIsScannerOpen(false)}
+        />
+      )}
+
+      {/* Manual Sticker Add Overlay */}
+      {isManualAddOpen && activeProfile && (
+        <ManualStickerAdd
+          profile={activeProfile}
+          onUpdateInventory={handleUpdateInventory}
+          onClose={() => setIsManualAddOpen(false)}
         />
       )}
     </div>
