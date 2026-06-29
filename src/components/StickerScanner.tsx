@@ -13,14 +13,10 @@ interface StickerScannerProps {
 
 export default function StickerScanner({ onClose, profile, onUpdateInventory }: StickerScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const overlayRef = useRef<HTMLCanvasElement>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [scannedCode, setScannedCode] = useState<string | null>(null);
-  const [scannedBox, setScannedBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
-  
   // Store crop coordinates for bounding box calculation
   const [cropData, setCropData] = useState<{ x: number; y: number; scale: number } | null>(null);
 
@@ -128,12 +124,11 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                 if (isRecognizing || scannedCode || isManualMode) return; // wait for user interaction or current scan
                 
                 const video = videoRef.current;
-                const canvas = canvasRef.current;
                 // Ensure we have dimensions to draw
                 const w = video?.videoWidth || video?.clientWidth || 640;
                 const h = video?.videoHeight || video?.clientHeight || 480;
                 
-                if (w === 0 || h === 0 || !canvas) return;
+                if (w === 0 || h === 0) return;
 
                 // Foolproof center-crop: Take the middle 50% of the video where the user holds the sticker
                 const cropW = w * 0.5;
@@ -141,22 +136,20 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                 const cropX = (w - cropW) / 2;
                 const cropY = (h - cropH) / 2;
 
-                // Upscale by 1.5x to improve OCR accuracy for small text
-                canvas.width = cropW * 1.5;
-                canvas.height = cropH * 1.5;
-                const ctx = canvas.getContext("2d");
-                if (!ctx) return;
-                
-                // Draw cropped and upscaled video to canvas
-                ctx.drawImage(video!, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
-                
-                // Do OCR on the ENTIRE frame using SPARSE_TEXT (finds text anywhere)
+                // Do OCR on the cropped portion of the video DIRECTLY (bypasses iOS canvas bugs entirely)
                 try {
                   setIsRecognizing(true);
-                  const { data } = await worker!.recognize(canvas);
+                  const { data } = await worker!.recognize(video!, {
+                    rectangle: {
+                      top: cropY,
+                      left: cropX,
+                      width: cropW,
+                      height: cropH
+                    }
+                  });
                   
                   // Update debug text so user can see what Tesseract is seeing
-                  setDebugOcrText(data.text.replace(/\n/g, " ").trim().substring(0, 100));
+                  setDebugOcrText(data.text.replace(/\n/g, " ").trim().substring(0, 150));
                   
                   // Look for valid codes in the text
                   const code = extractStickerCode(data.text);
@@ -243,9 +236,6 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
 
   return (
     <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
-      {/* Hidden canvas for OCR processing (using opacity-0 instead of hidden for iOS support) */}
-      <canvas ref={canvasRef} className="absolute opacity-0 pointer-events-none" />
-      
       {/* Header */}
       <div className="absolute top-0 inset-x-0 p-4 flex items-center justify-between z-20 bg-gradient-to-b from-black/80 to-transparent">
         <div className="flex items-center gap-2 text-white">
