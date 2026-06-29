@@ -25,32 +25,33 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
   const [manualCode, setManualCode]   = useState('');
   const [manualError, setManualError] = useState('');
   const [successMsg, setSuccessMsg]   = useState<string | null>(null);
+  const [initError, setInitError]     = useState<string | null>(null);
 
   const allKnownCodes = getAllStickerCodes().sort((a, b) => b.length - a.length);
 
-      const extractCode = (rawText: string): string | null => {
+  const extractCode = (rawText: string): string | null => {
     let upper = rawText.toUpperCase();
     
     // Fix common OCR errors where '1' or '0' is misread as letters AFTER a country code
-    upper = upper.replace(/([A-Z]{2,4})\s*[IL|]/g, '$1 1');
-    upper = upper.replace(/([A-Z]{2,4})\s*O/g, '$1 0');
+    upper = upper.replace(/([A-Z]{2,4})\\s*[IL|]/g, '$1 1');
+    upper = upper.replace(/([A-Z]{2,4})\\s*O/g, '$1 0');
     
     // Keep only letters, numbers, and spaces
-    upper = upper.replace(/[^A-Z0-9\n ]/g, ' ');
+    upper = upper.replace(/[^A-Z0-9\\n ]/g, ' ');
 
     // 1. Strict Regex: requires word boundaries (prevents PANINI -> PAN1N1 -> matching PAN1)
-    const strictRegex = /\b([A-Z]{2,4})\s*(\d{1,2})\b/g;
+    const strictRegex = /\\b([A-Z]{2,4})\\s*(\\d{1,2})\\b/g;
     const candidates: string[] = [];
     let m: RegExpExecArray | null;
     while ((m = strictRegex.exec(upper)) !== null) {
-      candidates.push((m[1] + m[2]).replace(/\s/g, ''));
+      candidates.push((m[1] + m[2]).replace(/\\s/g, ''));
     }
 
     // 2. Loose Regex: if strict failed, try without boundaries, but CAREFUL with PAN1
     if (candidates.length === 0) {
-      const looseRegex = /([A-Z]{2,4})\s*(\d{1,2})/g;
+      const looseRegex = /([A-Z]{2,4})\\s*(\\d{1,2})/g;
       while ((m = looseRegex.exec(upper)) !== null) {
-        candidates.push((m[1] + m[2]).replace(/\s/g, ''));
+        candidates.push((m[1] + m[2]).replace(/\\s/g, ''));
       }
     }
 
@@ -58,7 +59,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
     const validMatches: string[] = [];
     for (const candidate of candidates) {
       for (const known of allKnownCodes) {
-        if (known.toUpperCase().replace(/\s/g, '') === candidate) {
+        if (known.toUpperCase().replace(/\\s/g, '') === candidate) {
           validMatches.push(known);
           break;
         }
@@ -69,7 +70,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
       // MASSIVE FIX: The word "PANINI" is printed on the bottom of EVERY sticker.
       // If the OCR reads "PANINI" as "PAN1N1", it might trigger the code "PAN 1".
       // We filter out PAN1 if another valid code (like SUI 1) was also found.
-      const withoutPan = validMatches.filter(c => c.replace(/\s/g, '') !== 'PAN1');
+      const withoutPan = validMatches.filter(c => c.replace(/\\s/g, '') !== 'PAN1');
       if (withoutPan.length > 0) {
         return withoutPan[0]; 
       }
@@ -84,14 +85,26 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
     let alive = true;
     const init = async () => {
       try {
+        // langPath NICHT mehr setzen -> Tesseract.js nutzt den aktuellen
+        // jsDelivr-CDN-Default. Der alte projectnaptha-Host ist tot.
         const w = await createWorker('eng', 1, {
-          langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
+          logger: m => console.log('[OCR]', m.status, Math.round((m.progress || 0) * 100) + '%'),
+          errorHandler: err => console.error('[OCR worker error]', err),
         });
         if (!alive) { w.terminate(); return; }
-        await w.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK });
+        await w.setParameters({
+          tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+          // Sticker-Codes bestehen nur aus Grossbuchstaben + Ziffern ->
+          // Whitelist verhindert, dass z.B. "0" als "O" gelesen wird.
+          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ',
+        });
         workerRef.current = w;
         setWorkerReady(true);
-      } catch { /* ignore */ }
+      } catch (err) {
+        // Fehler NICHT mehr verschlucken - sonst haengt der Button ewig auf "Laedt..."
+        console.error('[OCR] Worker konnte nicht geladen werden:', err);
+        if (alive) setInitError(err instanceof Error ? err.message : 'OCR konnte nicht geladen werden');
+      }
     };
     init();
     return () => { alive = false; workerRef.current?.terminate(); };
@@ -146,9 +159,11 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
       cropCtx.drawImage(baseCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
       const blob = await new Promise<Blob>((res) => cropCanvas.toBlob(b => res(b!), 'image/jpeg', 0.95));
+      setDebugCropUrl(URL.createObjectURL(blob));
+
       const { data } = await workerRef.current.recognize(blob);
 
-      const rawText = data.text.replace(/\n/g, ' ').trim();
+      const rawText = data.text.replace(/\\n/g, ' ').trim();
       setOcrPreview(rawText.substring(0, 100));
 
       const code = extractCode(data.text);
@@ -226,7 +241,10 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                 Das System sucht automatisch nach dem Code.
               </p>
 
-              <p className="text-[11px] font-mono text-white/25">{workerReady ? 'Bereit' : 'Laedt...'}</p>
+              <p className="text-[11px] font-mono text-white/25">
+                {initError ? <span className="text-red-400">OCR-Fehler: {initError}</span>
+                  : workerReady ? 'Bereit' : 'Laedt...'}
+              </p>
 
               <button onClick={() => fileInputRef.current?.click()}
                 disabled={!workerReady}
