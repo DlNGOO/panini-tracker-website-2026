@@ -21,6 +21,11 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
   const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [scannedBox, setScannedBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   
+  const [scannedBox, setScannedBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  
+  // Store crop coordinates for bounding box calculation
+  const [cropData, setCropData] = useState<{ x: number; y: number; scale: number } | null>(null);
+
   const [isManualMode, setIsManualMode] = useState(false);
   const [manualCode, setManualCode] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -82,14 +87,35 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                 const canvas = canvasRef.current;
                 if (!video || !canvas) return;
 
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
+                // Crop the video to the reticle area for better and faster OCR
+                // Reticle size: w-56 h-72 = 14rem x 18rem = 224px x 288px
+                const reticleClientW = 224;
+                const reticleClientH = 288;
+                
+                const scaleX = video.videoWidth / video.clientWidth;
+                const scaleY = video.videoHeight / video.clientHeight;
+                
+                const reticleVideoW = reticleClientW * scaleX;
+                const reticleVideoH = reticleClientH * scaleY;
+                
+                const reticleVideoX = (video.videoWidth - reticleVideoW) / 2;
+                const reticleVideoY = (video.videoHeight - reticleVideoH) / 2;
+                
+                // Scale up the cropped area to improve OCR of small text
+                const scaleForOCR = 2;
+                canvas.width = reticleVideoW * scaleForOCR;
+                canvas.height = reticleVideoH * scaleForOCR;
+                
                 const ctx = canvas.getContext("2d");
                 if (!ctx) return;
                 
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                ctx.drawImage(
+                  video,
+                  reticleVideoX, reticleVideoY, reticleVideoW, reticleVideoH,
+                  0, 0, canvas.width, canvas.height
+                );
                 
-                // Do OCR
+                // Do OCR on the cropped and magnified canvas
                 try {
                   setIsRecognizing(true);
                   const { data } = await worker!.recognize(canvas);
@@ -99,6 +125,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                   
                   if (code) {
                     setScannedCode(code);
+                    setCropData({ x: reticleVideoX, y: reticleVideoY, scale: scaleForOCR });
                     
                     // Find bounding box for drawing overlay
                     let boxFound = false;
@@ -158,15 +185,20 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
     overlay.height = video.clientHeight;
     ctx.clearRect(0, 0, overlay.width, overlay.height);
 
-    if (scannedBox && scannedCode) {
-      // Tesseract boxes are relative to the video resolution, need to scale to client width
+    if (scannedBox && scannedCode && cropData) {
+      // Tesseract boxes are relative to the CROPPED canvas resolution
+      const boxRealVideoX0 = (scannedBox.x0 / cropData.scale) + cropData.x;
+      const boxRealVideoY0 = (scannedBox.y0 / cropData.scale) + cropData.y;
+      const boxRealVideoX1 = (scannedBox.x1 / cropData.scale) + cropData.x;
+      const boxRealVideoY1 = (scannedBox.y1 / cropData.scale) + cropData.y;
+
       const scaleX = video.clientWidth / video.videoWidth;
       const scaleY = video.clientHeight / video.videoHeight;
       
-      const x = scannedBox.x0 * scaleX;
-      const y = scannedBox.y0 * scaleY;
-      const w = (scannedBox.x1 - scannedBox.x0) * scaleX;
-      const h = (scannedBox.y1 - scannedBox.y0) * scaleY;
+      const x = boxRealVideoX0 * scaleX;
+      const y = boxRealVideoY0 * scaleY;
+      const w = (boxRealVideoX1 - boxRealVideoX0) * scaleX;
+      const h = (boxRealVideoY1 - boxRealVideoY0) * scaleY;
       
       // Draw border
       ctx.strokeStyle = "#4ade80"; // emerald-400
@@ -281,13 +313,17 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
         {/* Target Reticle (shows when scanning) */}
         {!scannedCode && !isManualMode && !isLoading && (
           <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center">
-            <div className="w-64 h-32 border-2 border-white/30 rounded-xl relative">
-              <div className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-indigo-500"></div>
-              <div className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-indigo-500"></div>
-              <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4 border-indigo-500"></div>
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4 border-indigo-500"></div>
+            <div className="w-56 h-72 border-2 border-white/30 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+              {/* Corner brackets */}
+              <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-indigo-500 rounded-tl-xl"></div>
+              <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-indigo-500 rounded-tr-xl"></div>
+              <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-indigo-500 rounded-bl-xl"></div>
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-indigo-500 rounded-br-xl"></div>
               
-              <p className="text-center text-white/50 text-xs mt-36 tracking-wider">Sticker-Nummer fokussieren</p>
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
+                 <p className="text-white/60 text-xs font-bold tracking-wider mb-1 uppercase">Sticker scannen</p>
+                 <p className="text-white/40 text-[10px] leading-tight">Nummer oben rechts<br/>im Rahmen platzieren</p>
+              </div>
             </div>
           </div>
         )}
