@@ -35,18 +35,26 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
   const allKnownCodes = getAllStickerCodes().sort((a, b) => b.length - a.length);
 
   const extractCode = (text: string): string | null => {
-    const cleaned = text.toUpperCase().replace(/[^A-Z0-9\s]/g, "");
-    const compact = cleaned.replace(/\s/g, "");
-    const tokens  = cleaned.split(/\s+/);
+    const tokens = text.toUpperCase().replace(/[^A-Z0-9]/g, ' ').split(/\s+/).filter(t => t.length > 0);
+    const compact = tokens.join('');
+    const scored: { code: string; score: number }[] = [];
     for (const code of allKnownCodes) {
       const c = code.toUpperCase();
-      if (cleaned.includes(c) || compact.includes(c)) return code;
+      // Highest: exact standalone token
+      if (tokens.includes(c)) { scored.push({ code, score: 100 }); continue; }
+      // High: two adjacent tokens form the code (e.g. "SUI" + "1" => "SUI1")
+      let pairMatch = false;
       for (let i = 0; i < tokens.length - 1; i++) {
-        if (tokens[i] + tokens[i + 1] === c) return code;
+        if (tokens[i] + tokens[i + 1] === c) { pairMatch = true; break; }
       }
+      if (pairMatch) { scored.push({ code, score: 80 }); continue; }
+      // Medium: compact match only for long codes (>=4 chars) to avoid short false positives
+      if (c.length >= 4 && compact.includes(c)) { scored.push({ code, score: 40 }); }
     }
-    return null;
-  };
+    if (scored.length === 0) return null;
+    scored.sort((a, b) => b.score - a.score);
+    return scored[0].code;
+  }
 
   const drawBoxes = useCallback((boxes: DetectionBox[], vw: number, vh: number) => {
     const oc  = overlayCanvas.current;
