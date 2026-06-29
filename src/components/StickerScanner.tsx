@@ -68,7 +68,11 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
     const initScanner = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" }
+          video: { 
+            facingMode: "environment",
+            width: { ideal: 1920 },
+            height: { ideal: 1080 }
+          }
         });
         
         if (videoRef.current) {
@@ -81,6 +85,10 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
               
               // Init Tesseract
               worker = await createWorker('eng');
+              await worker.setParameters({
+                tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
+                tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 '
+              });
               
               // Start interval scanning
               scanInterval = setInterval(async () => {
@@ -130,9 +138,19 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                   0, 0, canvas.width, canvas.height
                 );
                 
+                // Show the cropped image in the debug canvas
+                const debugCanvas = document.getElementById("debug-canvas") as HTMLCanvasElement;
+                if (debugCanvas) {
+                   debugCanvas.width = canvas.width;
+                   debugCanvas.height = canvas.height;
+                   const debugCtx = debugCanvas.getContext("2d");
+                   if (debugCtx) debugCtx.drawImage(canvas, 0, 0);
+                }
+                
                 // Do OCR on the cropped and magnified canvas
                 try {
                   setIsRecognizing(true);
+                  // Force a short timeout for OCR so it doesn't hang forever
                   const { data } = await worker!.recognize(canvas);
                   
                   // Look for valid codes in the text
@@ -264,6 +282,13 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
     setManualCode("");
     setErrorMsg(null);
     
+    // Clear the debug canvas
+    const debugCanvas = document.getElementById("debug-canvas") as HTMLCanvasElement;
+    if (debugCanvas) {
+       const dCtx = debugCanvas.getContext("2d");
+       if (dCtx) dCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
+    }
+
     if (overlayRef.current) {
       const ctx = overlayRef.current.getContext("2d");
       if (ctx) ctx.clearRect(0, 0, overlayRef.current.width, overlayRef.current.height);
@@ -329,27 +354,42 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
           className="absolute inset-0 w-full h-full pointer-events-none z-10"
         />
 
-        {/* Target Reticle (shows when scanning) */}
-        {!scannedCode && !isManualMode && !isLoading && (
+        {/* Target Reticle */}
+        {!isManualMode && !isLoading && (
           <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center">
-            <div className="w-56 h-72 border-2 border-white/30 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+            <div className={`w-56 h-72 border-2 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] transition-colors duration-300 ${scannedCode ? 'border-emerald-500 bg-emerald-500/10' : 'border-white/30'}`}>
               {/* Corner brackets */}
-              <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-indigo-500 rounded-tl-xl"></div>
-              <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-indigo-500 rounded-tr-xl"></div>
-              <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-indigo-500 rounded-bl-xl"></div>
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-indigo-500 rounded-br-xl"></div>
+              <div className={`absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 rounded-tl-xl transition-colors duration-300 ${scannedCode ? 'border-emerald-400' : 'border-indigo-500'}`}></div>
+              <div className={`absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 rounded-tr-xl transition-colors duration-300 ${scannedCode ? 'border-emerald-400' : 'border-indigo-500'}`}></div>
+              <div className={`absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 rounded-bl-xl transition-colors duration-300 ${scannedCode ? 'border-emerald-400' : 'border-indigo-500'}`}></div>
+              <div className={`absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 rounded-br-xl transition-colors duration-300 ${scannedCode ? 'border-emerald-400' : 'border-indigo-500'}`}></div>
               
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
-                 <p className="text-white/60 text-xs font-bold tracking-wider mb-1 uppercase">Sticker scannen</p>
-                 <p className="text-white/40 text-[10px] leading-tight">Nummer oben rechts<br/>im Rahmen platzieren</p>
-              </div>
+              {!scannedCode && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
+                   <p className="text-white/60 text-xs font-bold tracking-wider mb-1 uppercase">Sticker scannen</p>
+                   <p className="text-white/40 text-[10px] leading-tight">Nummer oben rechts<br/>im Rahmen platzieren</p>
+                </div>
+              )}
+              {scannedCode && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
+                   <CheckCircle className="h-12 w-12 text-emerald-400 opacity-80" />
+                </div>
+              )}
             </div>
+          </div>
+        )}
+
+        {/* Debug Canvas: Shows exactly what Tesseract is seeing */}
+        {!isManualMode && (
+          <div className="absolute top-20 left-4 z-20 flex flex-col gap-1 pointer-events-none opacity-60">
+            <span className="text-[9px] text-white/50 uppercase tracking-widest font-mono">Scanner-Auge:</span>
+            <canvas id="debug-canvas" className="w-24 border border-white/20 rounded bg-black/50" />
           </div>
         )}
 
         {/* Scanning Indicator */}
         {isRecognizing && !scannedCode && (
-           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-indigo-600/80 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 z-20">
+           <div className="absolute top-24 right-4 bg-indigo-600/80 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 z-20">
              <div className="w-2 h-2 bg-white rounded-full animate-ping"></div> Scanne...
            </div>
         )}
