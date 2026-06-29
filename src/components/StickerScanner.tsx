@@ -1,6 +1,6 @@
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { X, Camera as CameraIcon, CheckCircle, RefreshCcw, Edit2 } from "lucide-react";
-import { createWorker } from "tesseract.js";
+import Tesseract, { createWorker } from "tesseract.js";
 import { motion, AnimatePresence } from "motion/react";
 import { UserProfile, getAllStickerCodes, parseStickerCode } from "../types";
 import { getStickerName } from "../playerData";
@@ -12,435 +12,410 @@ interface StickerScannerProps {
 }
 
 export default function StickerScanner({ onClose, profile, onUpdateInventory }: StickerScannerProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const workerRef = useRef<Tesseract.Worker | null>(null);
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRecognizing, setIsRecognizing] = useState(false);
+  const [status, setStatus] = useState<"idle" | "scanning" | "done" | "error">("idle");
   const [scannedCode, setScannedCode] = useState<string | null>(null);
-  // Store crop coordinates for bounding box calculation
-  const [cropData, setCropData] = useState<{ x: number; y: number; scale: number } | null>(null);
-
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isManualMode, setIsManualMode] = useState(false);
   const [manualCode, setManualCode] = useState("");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [ocrLog, setOcrLog] = useState("Lade Scanner...");
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [ocrStatus, setOcrStatus] = useState<string>("Kamera startet...");
-  const [debugOcrText, setDebugOcrText] = useState<string>("");
-  
-  // Track if scanner is active for requestAnimationFrame
-  const isScanningRef = useRef(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const stopMediaTracks = () => {
-    isScanningRef.current = false;
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((track) => track.stop());
-    }
-  };
+  const allKnownCodes = getAllStickerCodes().sort((a, b) => b.length - a.length);
 
   useEffect(() => {
-    isScanningRef.current = true;
-    let worker: Tesseract.Worker | null = null;
-    let scanInterval: ReturnType<typeof setInterval>;
-    
-    // Sort codes by length descending so we match "GER10" before "GER1"
-    const allKnownCodes = getAllStickerCodes().sort((a, b) => b.length - a.length);
-    
-    // Format detected string into a possible sticker code
-    const extractStickerCode = (text: string): string | null => {
-      // Remove all spaces, punctuation, and newlines
-      let cleanText = text.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-      
-      // Common OCR mistakes correction
-      cleanText = cleanText.replace(/0/g, "O").replace(/O/g, "0"); // Numbers vs Letters
-      // It's hard to safely replace 1/I/L globally, but let's just look for substring matches
-      
-      // Find the first (longest) code that is in the text
-      for (const code of allKnownCodes) {
-        // Tesseract sometimes sees 'O' instead of '0', so let's normalize the code we're looking for too
-        const normalizedCode = code.replace(/O/g, "0");
-        
-        if (cleanText.includes(normalizedCode)) {
-          return code;
-        }
-      }
-      return null;
-    };
-
-    const initScanner = async () => {
+    let cancelled = false;
+    const initWorker = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { 
-            facingMode: "environment",
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-          }
-        });
-        
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          // Wait for video to be ready before starting OCR
-          videoRef.current.onloadedmetadata = async () => {
-            if (videoRef.current) {
-              videoRef.current.play();
-              setIsLoading(false);
-              setOcrStatus("Lade KI-Modell...");
-              
-                // Start debug canvas loop independent of Tesseract
-                const drawDebug = () => {
-                   if (!isScanningRef.current) return;
-                   
-                   // Draw the video to the debug canvas to show the raw feed
-                   const debugCanvas = document.getElementById("debug-canvas") as HTMLCanvasElement;
-                   if (debugCanvas && videoRef.current && videoRef.current.readyState === 4) {
-                      debugCanvas.width = 100;
-                      debugCanvas.height = 150;
-                      const debugCtx = debugCanvas.getContext("2d");
-                      if (debugCtx) debugCtx.drawImage(videoRef.current, 0, 0, 100, 150);
-                   }
-                   requestAnimationFrame(drawDebug);
-                };
-                drawDebug();
-
-              // Init Tesseract with logger to track progress and use fast model
-              worker = await createWorker('eng', 1, {
-                langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
-                logger: m => {
-                  if (m.status === "recognizing text") {
-                    setOcrStatus(`Analysiere... ${Math.round(m.progress * 100)}%`);
-                  } else {
-                    let statusDe = m.status;
-                    if (m.status.includes("loading")) statusDe = "Lade Sprachmodell...";
-                    if (m.status.includes("initializing")) statusDe = "Starte Scanner...";
-                    if (m.status.includes("downloading")) statusDe = "Lade Daten...";
-                    setOcrStatus(statusDe);
-                  }
-                }
-              });
-              await worker.setParameters({
-                tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT
-              });
-              
-              // Start interval scanning
-              scanInterval = setInterval(async () => {
-                if (!worker) return;
-                if (isRecognizing || scannedCode || isManualMode) return; // wait for user interaction or current scan
-                
-                const video = videoRef.current;
-                const canvas = document.createElement("canvas"); // Create a fresh canvas for processing
-                
-                // Ensure we have dimensions to draw
-                const w = video?.videoWidth || video?.clientWidth || 640;
-                const h = video?.videoHeight || video?.clientHeight || 480;
-                
-                if (w === 0 || h === 0) return;
-
-                // Foolproof center-crop: Take the middle 50% of the video where the user holds the sticker
-                const cropW = w * 0.5;
-                const cropH = h * 0.5;
-                const cropX = (w - cropW) / 2;
-                const cropY = (h - cropH) / 2;
-
-                // Upscale by 2x to make text huge for the OCR
-                canvas.width = cropW * 2;
-                canvas.height = cropH * 2;
-                const ctx = canvas.getContext("2d", { willReadFrequently: true });
-                if (!ctx) return;
-                
-                // Draw cropped and upscaled video to canvas
-                ctx.drawImage(video!, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
-                
-                // B&W High-Contrast Preprocessing
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const dataPixels = imageData.data;
-                for (let i = 0; i < dataPixels.length; i += 4) {
-                  // Grayscale
-                  const avg = (dataPixels[i] + dataPixels[i + 1] + dataPixels[i + 2]) / 3;
-                  // Threshold (make it stark black and white)
-                  const color = avg > 120 ? 255 : 0;
-                  dataPixels[i] = color;
-                  dataPixels[i+1] = color;
-                  dataPixels[i+2] = color;
-                }
-                ctx.putImageData(imageData, 0, 0);
-
-                // Show the PROCESSED image in the second debug canvas
-                const bwCanvas = document.getElementById("bw-canvas") as HTMLCanvasElement;
-                if (bwCanvas) {
-                   bwCanvas.width = 100;
-                   bwCanvas.height = 100;
-                   const bwCtx = bwCanvas.getContext("2d");
-                   if (bwCtx) bwCtx.drawImage(canvas, 0, 0, 100, 100);
-                }
-
-                // Do OCR on the processed black & white canvas
-                try {
-                  setIsRecognizing(true);
-                  const { data } = await worker!.recognize(canvas);
-                  
-                  // Update debug text so user can see what Tesseract is seeing
-                  setDebugOcrText(data.text.replace(/\n/g, " ").trim().substring(0, 150));
-                  
-                  // Look for valid codes in the text
-                  const code = extractStickerCode(data.text);
-                  
-                  if (code) {
-                    setScannedCode(code);
-                  }
-                } catch (e) {
-                  console.error("OCR Error:", e);
-                } finally {
-                  setIsRecognizing(false);
-                }
-              }, 1500); // scan every 1.5s
+        const w = await createWorker("eng", 1, {
+          langPath: "https://tessdata.projectnaptha.com/4.0.0_fast",
+          logger: (m: { status: string; progress: number }) => {
+            if (cancelled) return;
+            if (m.status === "recognizing text") {
+              setOcrProgress(Math.round(m.progress * 100));
+              setOcrLog("Analysiere... " + Math.round(m.progress * 100) + "%");
+            } else if (m.status.includes("load")) {
+              setOcrLog("Lade Modell...");
             }
-          };
-        }
-      } catch (err) {
-        console.error("Camera error:", err);
-        setErrorMsg("Kamera-Zugriff verweigert oder nicht verfügbar.");
-        setIsLoading(false);
+          },
+        });
+        if (cancelled) { w.terminate(); return; }
+        await w.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT });
+        workerRef.current = w;
+        setOcrLog("Bereit zum Scannen");
+      } catch {
+        setOcrLog("Fehler beim Laden");
       }
     };
-
-    initScanner();
-
+    initWorker();
     return () => {
-      stopMediaTracks();
-      clearInterval(scanInterval);
-      if (worker) {
-        worker.terminate();
-      }
+      cancelled = true;
+      workerRef.current?.terminate();
     };
-  }, [scannedCode, isRecognizing, isManualMode]);
-
-  // No overlay canvas needed anymore since we just turn the reticle green
-  useEffect(() => {
-    // keeping effect for consistency but empty since we removed overlay box drawing
   }, []);
 
-  const handleAddSticker = (codeToAdd: string) => {
-    const parsed = parseStickerCode(codeToAdd);
-    if (!parsed) {
-      setErrorMsg("Ungültiger Sticker-Code!");
-      return;
+  const extractStickerCode = (text: string): string | null => {
+    const cleaned = text.toUpperCase().replace(/[^A-Z0-9\s]/g, "");
+    const compact = cleaned.replace(/\s/g, "");
+    const tokens = cleaned.split(/\s+/);
+    for (const code of allKnownCodes) {
+      const c = code.toUpperCase();
+      if (cleaned.includes(c) || compact.includes(c)) return code;
+      for (let i = 0; i < tokens.length - 1; i++) {
+        if (tokens[i] + tokens[i + 1] === c) return code;
+      }
     }
-    
-    const newOwned = [...profile.owned];
-    const newDuplicates = { ...profile.duplicates };
-    
-    if (newOwned.includes(codeToAdd)) {
-      newDuplicates[codeToAdd] = (newDuplicates[codeToAdd] || 0) + 1;
-      setSuccessMsg(`${codeToAdd} als DOPPELT eingetragen (+${newDuplicates[codeToAdd]})`);
-    } else {
-      newOwned.push(codeToAdd);
-      setSuccessMsg(`${codeToAdd} zum Album hinzugefügt!`);
-    }
-    
-    onUpdateInventory(newOwned, newDuplicates);
-    
-    // Reset scanner for next sticker after 1.5s
-    setTimeout(() => {
-      setSuccessMsg(null);
-      handleResumeScanning();
-    }, 1500);
+    return null;
   };
 
-  const handleResumeScanning = () => {
+  const handlePhotoTaken = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const imageUrl = URL.createObjectURL(file);
+    setCapturedImage(imageUrl);
+    setStatus("scanning");
+    setOcrLog("Analysiere Foto...");
+    setOcrProgress(0);
     setScannedCode(null);
-    setIsManualMode(false);
-    setManualCode("");
     setErrorMsg(null);
-    setDebugOcrText("");
-    
-    // Clear the debug canvas
-    const debugCanvas = document.getElementById("debug-canvas") as HTMLCanvasElement;
-    if (debugCanvas) {
-       const dCtx = debugCanvas.getContext("2d");
-       if (dCtx) dCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
+
+    if (!workerRef.current) {
+      setErrorMsg("Scanner noch nicht bereit. Bitte kurz warten und nochmal versuchen.");
+      setStatus("error");
+      return;
     }
+
+    try {
+      const { data } = await workerRef.current.recognize(file);
+      const code = extractStickerCode(data.text);
+      if (code) {
+        setScannedCode(code);
+        setStatus("done");
+        setOcrLog("");
+      } else {
+        setStatus("error");
+        const preview = data.text.replace(/\n/g, " ").trim().substring(0, 80);
+        setErrorMsg(
+          preview
+            ? `Kein Code erkannt. Erkannt: "${preview}" – Bitte naher ranhalten oder manuell eingeben.`
+            : "Kein Text erkannt. Bitte naher ranhalten."
+        );
+      }
+    } catch {
+      setStatus("error");
+      setErrorMsg("Fehler beim Scannen. Bitte nochmal versuchen.");
+    }
+  };
+
+  const handleTakeAnother = () => {
+    setStatus("idle");
+    setCapturedImage(null);
+    setScannedCode(null);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setOcrLog("Bereit zum Scannen");
+    setOcrProgress(0);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleConfirmAdd = () => {
+    if (!scannedCode) return;
+    const newOwned = [...profile.owned];
+    const newDuplicates = { ...profile.duplicates };
+    if (newOwned.includes(scannedCode)) {
+      newDuplicates[scannedCode] = (newDuplicates[scannedCode] || 1) + 1;
+      setSuccessMsg(`Duplikat von ${scannedCode} (${getStickerName(scannedCode)}) gespeichert!`);
+    } else {
+      newOwned.push(scannedCode);
+      setSuccessMsg(`${scannedCode} (${getStickerName(scannedCode)}) hinzugefuegt!`);
+    }
+    onUpdateInventory(newOwned, newDuplicates);
+    setTimeout(() => handleTakeAnother(), 2000);
+  };
+
+  const handleManualSubmit = () => {
+    const code = manualCode.trim().toUpperCase();
+    if (!allKnownCodes.includes(code)) {
+      setErrorMsg(`Code "${code}" nicht gefunden. Bitte pruefen.`);
+      return;
+    }
+    setScannedCode(code);
+    setStatus("done");
+    setIsManualMode(false);
+    setErrorMsg(null);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col overflow-y-auto">
+      {/* Native camera file input — works on iOS Safari + all Android */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handlePhotoTaken}
+        className="hidden"
+      />
+
       {/* Header */}
-      <div className="absolute top-0 inset-x-0 p-4 flex items-center justify-between z-20 bg-gradient-to-b from-black/80 to-transparent">
+      <div className="sticky top-0 inset-x-0 p-4 flex items-center justify-between z-20 bg-gradient-to-b from-black/80 to-transparent backdrop-blur-sm">
         <div className="flex items-center gap-2 text-white">
-          <CameraIcon className="h-5 w-5 text-indigo-400" />
-          <span className="font-bold tracking-wider">STICKER-SCANNER</span>
+          <CameraIcon className="w-5 h-5 text-indigo-400" />
+          <span className="font-bold text-lg tracking-wide">Sticker Scannen</span>
         </div>
         <button
           onClick={onClose}
-          className="p-2 bg-slate-800/80 hover:bg-slate-700/80 text-white rounded-full transition-colors"
+          className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
         >
-          <X className="h-5 w-5" />
+          <X className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Camera Container */}
-      <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
-        {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center flex-col gap-4 z-10">
-            <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-slate-400 text-sm font-mono animate-pulse">Kamera wird initialisiert...</p>
-          </div>
-        )}
-        
-        {errorMsg && !isLoading && (
-          <div className="absolute inset-x-4 top-20 bg-rose-500/20 border border-rose-500/50 p-4 rounded-xl text-rose-400 text-sm text-center z-20">
-            {errorMsg}
-          </div>
-        )}
-        
-        {successMsg && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="absolute top-1/3 inset-x-8 bg-emerald-500 border border-emerald-400 p-4 rounded-2xl text-white text-center z-30 shadow-2xl shadow-emerald-500/20"
-          >
-            <CheckCircle className="h-10 w-10 mx-auto mb-2 opacity-90" />
-            <h3 className="font-black text-lg">{successMsg}</h3>
-          </motion.div>
-        )}
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 py-8">
+        <AnimatePresence mode="wait">
 
-        {/* Video feed */}
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover"
-          playsInline
-          muted
-        />
+          {/* ── IDLE STATE ── */}
+          {status === "idle" && !isManualMode && (
+            <motion.div
+              key="idle"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center gap-8 w-full max-w-sm"
+            >
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-white mb-2">Foto vom Sticker-Code</h2>
+                <p className="text-white/60 text-sm leading-relaxed">
+                  Halte die Kamera nah an den{" "}
+                  <strong className="text-indigo-400">Code oben rechts</strong> auf dem
+                  Sticker und mache ein Foto.
+                </p>
+              </div>
 
-        {/* Target Reticle */}
-        {!isManualMode && !isLoading && (
-          <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center">
-            <div className={`w-56 h-72 border-2 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] transition-colors duration-300 ${scannedCode ? 'border-emerald-500 bg-emerald-500/10' : 'border-white/30'}`}>
-              {/* Corner brackets */}
-              <div className={`absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 rounded-tl-xl transition-colors duration-300 ${scannedCode ? 'border-emerald-400' : 'border-indigo-500'}`}></div>
-              <div className={`absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 rounded-tr-xl transition-colors duration-300 ${scannedCode ? 'border-emerald-400' : 'border-indigo-500'}`}></div>
-              <div className={`absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 rounded-bl-xl transition-colors duration-300 ${scannedCode ? 'border-emerald-400' : 'border-indigo-500'}`}></div>
-              <div className={`absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 rounded-br-xl transition-colors duration-300 ${scannedCode ? 'border-emerald-400' : 'border-indigo-500'}`}></div>
-              
-              {!scannedCode && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
-                   <p className="text-white/60 text-xs font-bold tracking-wider mb-1 uppercase">Sticker scannen</p>
-                   <p className="text-white/40 text-[10px] leading-tight">Nummer oben rechts<br/>im Rahmen platzieren</p>
+              {/* Visual guide */}
+              <div className="relative w-52 h-52 rounded-2xl overflow-hidden border-2 border-dashed border-indigo-500/40 bg-white/5 flex items-center justify-center">
+                <CameraIcon className="w-16 h-16 text-white/20" />
+                {/* Simulated sticker corner */}
+                <div className="absolute top-3 right-3">
+                  <div className="w-14 h-9 border-2 border-indigo-400 rounded-lg animate-pulse" />
+                  <div className="absolute top-1 right-1 bg-indigo-600 rounded-md px-1.5 py-0.5 text-[10px] text-white font-bold">
+                    GER10
+                  </div>
                 </div>
-              )}
-              {scannedCode && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
-                   <CheckCircle className="h-12 w-12 text-emerald-400 opacity-80" />
+                <div className="absolute bottom-3 left-0 right-0 text-center">
+                  <span className="text-[10px] text-white/30 uppercase tracking-widest">Code oben rechts</span>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
+              </div>
 
-        {/* Debug Canvas: Shows exactly what Tesseract is seeing */}
-        {!isManualMode && (
-          <div className="absolute top-20 left-4 z-20 flex flex-col gap-1 pointer-events-none opacity-80">
-            <span className="text-[9px] text-white uppercase tracking-widest font-mono">Kamera-Feed:</span>
-            <canvas id="debug-canvas" className="w-16 h-24 border border-indigo-500/50 rounded-lg bg-black shadow-2xl object-cover" />
-            
-            <span className="text-[9px] text-white uppercase tracking-widest font-mono mt-1">KI-Filter:</span>
-            <canvas id="bw-canvas" className="w-16 h-16 border border-emerald-500/50 rounded-lg bg-black shadow-2xl object-cover" />
-          </div>
-        )}
-        
-        {/* Debug OCR Text: Shows what text was extracted */}
-        {!isManualMode && (
-          <div className="absolute top-48 left-4 z-20 flex flex-col gap-1 pointer-events-none opacity-90 max-w-[150px]">
-            <span className="text-[9px] text-white uppercase tracking-widest font-mono">Gelesen:</span>
-            <div className="text-[10px] text-emerald-400 font-mono bg-black/80 p-2 rounded-lg min-h-[24px] break-words border border-white/10">
-              {debugOcrText || "Noch nichts..."}
-            </div>
-          </div>
-        )}
+              <p className="text-xs text-white/30 font-mono">{ocrLog}</p>
 
-        {/* Scanning Indicator / Logger */}
-        {!scannedCode && (
-           <div className="absolute top-24 right-4 bg-indigo-600/90 backdrop-blur-md px-4 py-2 rounded-xl text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 z-20 shadow-xl border border-indigo-500/50 max-w-[200px] text-right">
-             <div className="w-2 h-2 bg-white rounded-full animate-ping flex-shrink-0"></div> 
-             <span className="truncate">{ocrStatus}</span>
-           </div>
-        )}
-      </div>
-
-      {/* Bottom Panel (Controls / Action UI) */}
-      <AnimatePresence>
-        {scannedCode && !successMsg && (
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            className="absolute bottom-0 inset-x-0 bg-slate-900 border-t border-slate-800 p-6 rounded-t-3xl z-40 shadow-2xl"
-          >
-            <div className="text-center mb-6">
-              <p className="text-slate-400 text-xs uppercase font-bold tracking-widest mb-2">Sticker erkannt</p>
-              <h2 className="text-5xl font-black font-mono text-white mb-2">{scannedCode}</h2>
-              <p className="text-emerald-400 text-sm">{getStickerName(scannedCode)}</p>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => handleAddSticker(scannedCode)}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl flex flex-col items-center gap-1 shadow-lg shadow-indigo-500/20"
+                id="scan-photo-btn"
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full py-5 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-lg flex items-center justify-center gap-3 shadow-xl shadow-indigo-900/50 transition-all active:scale-95"
               >
-                <CheckCircle className="h-5 w-5" />
-                <span>Eintragen</span>
+                <CameraIcon className="w-6 h-6" />
+                Foto aufnehmen
               </button>
-              
-              <div className="grid grid-rows-2 gap-3">
+
+              <button
+                onClick={() => setIsManualMode(true)}
+                className="text-sm text-white/40 hover:text-white/70 transition-colors flex items-center gap-2"
+              >
+                <Edit2 className="w-4 h-4" />
+                Code manuell eingeben
+              </button>
+            </motion.div>
+          )}
+
+          {/* ── SCANNING STATE ── */}
+          {status === "scanning" && capturedImage && (
+            <motion.div
+              key="scanning"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center gap-6 w-full max-w-sm"
+            >
+              <h2 className="text-xl font-bold text-white">Wird analysiert...</h2>
+              <div className="relative w-full rounded-2xl overflow-hidden border border-white/10">
+                <img src={capturedImage} alt="Sticker" className="w-full object-cover" />
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <div className="bg-black/80 rounded-xl px-4 py-3 text-center">
+                    <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                    <p className="text-white text-sm font-mono">{ocrLog}</p>
+                    {ocrProgress > 0 && (
+                      <div className="w-40 h-1 bg-white/20 rounded-full mt-2 mx-auto overflow-hidden">
+                        <div
+                          className="h-full bg-indigo-400 rounded-full transition-all"
+                          style={{ width: `${ocrProgress}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── ERROR STATE ── */}
+          {status === "error" && (
+            <motion.div
+              key="error"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center gap-6 w-full max-w-sm"
+            >
+              {capturedImage && (
+                <div className="w-full rounded-2xl overflow-hidden border border-red-500/30">
+                  <img src={capturedImage} alt="Sticker" className="w-full object-cover opacity-70" />
+                </div>
+              )}
+              <div className="bg-red-900/30 border border-red-500/30 rounded-xl p-4 text-center w-full">
+                <p className="text-red-300 text-sm leading-relaxed">{errorMsg}</p>
+              </div>
+              <div className="flex flex-col gap-3 w-full">
                 <button
-                  onClick={handleResumeScanning}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl flex items-center justify-center gap-2 text-xs"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold flex items-center justify-center gap-2 active:scale-95 transition-all"
                 >
-                  <RefreshCcw className="h-3.5 w-3.5" /> Neu Scannen
+                  <RefreshCcw className="w-4 h-4" />
+                  Nochmal versuchen
                 </button>
                 <button
-                  onClick={() => setIsManualMode(true)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl flex items-center justify-center gap-2 text-xs"
+                  onClick={() => {
+                    setIsManualMode(true);
+                    setStatus("idle");
+                    setCapturedImage(null);
+                  }}
+                  className="w-full py-3 rounded-xl bg-white/10 text-white font-medium flex items-center justify-center gap-2 active:scale-95 transition-all"
                 >
-                  <Edit2 className="h-3.5 w-3.5" /> Manuelle Eingabe
+                  <Edit2 className="w-4 h-4" />
+                  Manuell eingeben
                 </button>
               </div>
-            </div>
-          </motion.div>
-        )}
-        
-        {isManualMode && (
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            className="absolute bottom-0 inset-x-0 bg-slate-900 border-t border-slate-800 p-6 rounded-t-3xl z-40 shadow-2xl"
-          >
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-white">Sticker manuell eintragen</h3>
-              <button onClick={handleResumeScanning} className="text-slate-400 hover:text-white">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <input
-              type="text"
-              value={manualCode}
-              onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-              placeholder="z.B. GER 10"
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white font-mono text-xl text-center mb-4 focus:border-indigo-500 focus:outline-none"
-              autoFocus
-            />
-            
-            <button
-              onClick={() => handleAddSticker(manualCode.replace(/\s+/g, ""))}
-              disabled={!manualCode}
-              className="w-full bg-indigo-600 disabled:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg"
+            </motion.div>
+          )}
+
+          {/* ── SUCCESS STATE ── */}
+          {status === "done" && scannedCode && (
+            <motion.div
+              key="success"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center gap-6 w-full max-w-sm"
             >
-              Speichern
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              {capturedImage && (
+                <div className="w-full rounded-2xl overflow-hidden border-2 border-emerald-500/50">
+                  <img src={capturedImage} alt="Sticker" className="w-full object-cover" />
+                </div>
+              )}
+              <div className="text-center">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                >
+                  <CheckCircle className="w-16 h-16 text-emerald-400 mx-auto mb-3" />
+                </motion.div>
+                <h2 className="text-2xl font-bold text-white mb-1">Sticker erkannt!</h2>
+                <div className="inline-flex items-center gap-2 bg-indigo-600/30 border border-indigo-500/40 rounded-xl px-4 py-2 mb-2">
+                  <span className="text-2xl font-bold text-indigo-300">{scannedCode}</span>
+                </div>
+                <p className="text-white/70 text-sm">{getStickerName(scannedCode)}</p>
+                {profile.owned.includes(scannedCode) && (
+                  <p className="text-amber-400 text-xs mt-1">
+                    Bereits vorhanden – wird als Duplikat gezaehlt
+                  </p>
+                )}
+              </div>
+
+              {successMsg ? (
+                <div className="bg-emerald-900/30 border border-emerald-500/30 rounded-xl p-4 text-center w-full">
+                  <p className="text-emerald-300 font-medium">{successMsg}</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3 w-full">
+                  <button
+                    onClick={handleConfirmAdd}
+                    className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-lg flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-emerald-900/50"
+                  >
+                    <CheckCircle className="w-5 h-5" />
+                    Zur Sammlung hinzufuegen
+                  </button>
+                  <button
+                    onClick={handleTakeAnother}
+                    className="w-full py-3 rounded-xl bg-white/10 text-white font-medium flex items-center justify-center gap-2 active:scale-95 transition-all"
+                  >
+                    <RefreshCcw className="w-4 h-4" />
+                    Anderen Sticker scannen
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ── MANUAL ENTRY ── */}
+          {isManualMode && (
+            <motion.div
+              key="manual"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center gap-6 w-full max-w-sm"
+            >
+              <h2 className="text-xl font-bold text-white">Code eingeben</h2>
+              <p className="text-white/50 text-sm text-center">
+                z.B.{" "}
+                <span className="text-indigo-400 font-mono">GER10</span> oder{" "}
+                <span className="text-indigo-400 font-mono">SUI1</span>
+              </p>
+              {errorMsg && (
+                <div className="bg-red-900/30 border border-red-500/30 rounded-xl p-3 text-center w-full">
+                  <p className="text-red-300 text-sm">{errorMsg}</p>
+                </div>
+              )}
+              <input
+                type="text"
+                value={manualCode}
+                onChange={(e) => {
+                  setManualCode(e.target.value.toUpperCase());
+                  setErrorMsg(null);
+                }}
+                onKeyDown={(e) => e.key === "Enter" && handleManualSubmit()}
+                placeholder="z.B. GER10"
+                className="w-full px-4 py-4 rounded-xl bg-white/10 border border-white/20 text-white text-2xl font-mono text-center placeholder-white/30 focus:outline-none focus:border-indigo-500 focus:bg-white/15 transition-all"
+                autoFocus
+              />
+              <div className="flex gap-3 w-full">
+                <button
+                  onClick={() => {
+                    setIsManualMode(false);
+                    setErrorMsg(null);
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-white/10 text-white font-medium active:scale-95 transition-all"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={handleManualSubmit}
+                  className="flex-1 py-3 rounded-xl bg-indigo-600 text-white font-bold active:scale-95 transition-all"
+                >
+                  Bestaetigen
+                </button>
+              </div>
+            </motion.div>
+          )}
+
+        </AnimatePresence>
+      </div>
     </div>
   );
-}
+}
