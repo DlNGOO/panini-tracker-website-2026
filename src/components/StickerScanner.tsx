@@ -27,8 +27,16 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
 
   const allKnownCodes = getAllStickerCodes().sort((a, b) => b.length - a.length);
 
-  const extractCode = (text: string): string | null => {
-    const upper = text.toUpperCase().replace(/[^A-Z0-9\n ]/g, ' ');
+    const extractCode = (rawText: string): string | null => {
+    let upper = rawText.toUpperCase();
+    
+    // Tesseract often reads '1' as 'I' or 'l' or '|' when it's next to letters.
+    // e.g. "SUI I", "GER l", "FRA |"
+    upper = upper.replace(/([A-Z]{3})\s*[IL|]/g, '$1 1');
+    upper = upper.replace(/([A-Z]{3})\s*O/g, '$1 0');
+    
+    upper = upper.replace(/[^A-Z0-9\n ]/g, ' ');
+
     const patternRegex = /\b([A-Z]{2,4})\s*(\d{1,2})\b/g;
     const candidates: string[] = [];
     let m: RegExpExecArray | null;
@@ -49,6 +57,15 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
         if (tokens[i] + tokens[i + 1] === c) return code;
       }
     }
+    
+    // Final fallback: just look if the exact code without spaces appears anywhere in the raw text without spaces
+    const noSpaceText = upper.replace(/\s/g, '');
+    for (const code of allKnownCodes) {
+      const c = code.toUpperCase().replace(/\s/g, '');
+      // Only do this for codes that have numbers, to avoid matching "GER" by accident
+      if (c.length >= 4 && noSpaceText.includes(c)) return code;
+    }
+
     return null;
   };
 
@@ -101,7 +118,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
       const ctx = processCanvas.getContext('2d')!;
       
       // High contrast and grayscale to make text pop
-      ctx.filter = 'grayscale(100%) contrast(250%) brightness(120%)';
+      ctx.filter = 'grayscale(100%) invert(100%) contrast(300%) brightness(150%)';
       ctx.drawImage(img, 0, 0, w, h);
 
       const blob = await new Promise<Blob>((res) => processCanvas.toBlob(b => res(b!), 'image/jpeg', 0.95));
