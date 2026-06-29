@@ -86,20 +86,22 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
               setIsLoading(false);
               setOcrStatus("Lade KI-Modell...");
               
-              // Start debug canvas loop independent of Tesseract
-              const drawDebug = () => {
-                 if (!isScanningRef.current) return;
-                 const debugCanvas = document.getElementById("debug-canvas") as HTMLCanvasElement;
-                 if (debugCanvas && videoRef.current && videoRef.current.readyState === 4) {
-                    debugCanvas.width = 100;
-                    debugCanvas.height = 150;
-                    const debugCtx = debugCanvas.getContext("2d");
-                    if (debugCtx) debugCtx.drawImage(videoRef.current, 0, 0, 100, 150);
-                 }
-                 requestAnimationFrame(drawDebug);
-              };
-              drawDebug();
-              
+                // Start debug canvas loop independent of Tesseract
+                const drawDebug = () => {
+                   if (!isScanningRef.current) return;
+                   
+                   // Draw the video to the debug canvas to show the raw feed
+                   const debugCanvas = document.getElementById("debug-canvas") as HTMLCanvasElement;
+                   if (debugCanvas && videoRef.current && videoRef.current.readyState === 4) {
+                      debugCanvas.width = 100;
+                      debugCanvas.height = 150;
+                      const debugCtx = debugCanvas.getContext("2d");
+                      if (debugCtx) debugCtx.drawImage(videoRef.current, 0, 0, 100, 150);
+                   }
+                   requestAnimationFrame(drawDebug);
+                };
+                drawDebug();
+
               // Init Tesseract with logger to track progress and use fast model
               worker = await createWorker('eng', 1, {
                 langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
@@ -121,9 +123,12 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
               
               // Start interval scanning
               scanInterval = setInterval(async () => {
+                if (!worker) return;
                 if (isRecognizing || scannedCode || isManualMode) return; // wait for user interaction or current scan
                 
                 const video = videoRef.current;
+                const canvas = document.createElement("canvas"); // Create a fresh canvas for processing
+                
                 // Ensure we have dimensions to draw
                 const w = video?.videoWidth || video?.clientWidth || 640;
                 const h = video?.videoHeight || video?.clientHeight || 480;
@@ -136,17 +141,42 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                 const cropX = (w - cropW) / 2;
                 const cropY = (h - cropH) / 2;
 
-                // Do OCR on the cropped portion of the video DIRECTLY (bypasses iOS canvas bugs entirely)
+                // Upscale by 2x to make text huge for the OCR
+                canvas.width = cropW * 2;
+                canvas.height = cropH * 2;
+                const ctx = canvas.getContext("2d", { willReadFrequently: true });
+                if (!ctx) return;
+                
+                // Draw cropped and upscaled video to canvas
+                ctx.drawImage(video!, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+                
+                // B&W High-Contrast Preprocessing
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const dataPixels = imageData.data;
+                for (let i = 0; i < dataPixels.length; i += 4) {
+                  // Grayscale
+                  const avg = (dataPixels[i] + dataPixels[i + 1] + dataPixels[i + 2]) / 3;
+                  // Threshold (make it stark black and white)
+                  const color = avg > 120 ? 255 : 0;
+                  dataPixels[i] = color;
+                  dataPixels[i+1] = color;
+                  dataPixels[i+2] = color;
+                }
+                ctx.putImageData(imageData, 0, 0);
+
+                // Show the PROCESSED image in the second debug canvas
+                const bwCanvas = document.getElementById("bw-canvas") as HTMLCanvasElement;
+                if (bwCanvas) {
+                   bwCanvas.width = 100;
+                   bwCanvas.height = 100;
+                   const bwCtx = bwCanvas.getContext("2d");
+                   if (bwCtx) bwCtx.drawImage(canvas, 0, 0, 100, 100);
+                }
+
+                // Do OCR on the processed black & white canvas
                 try {
                   setIsRecognizing(true);
-                  const { data } = await worker!.recognize(video!, {
-                    rectangle: {
-                      top: cropY,
-                      left: cropX,
-                      width: cropW,
-                      height: cropH
-                    }
-                  });
+                  const { data } = await worker!.recognize(canvas);
                   
                   // Update debug text so user can see what Tesseract is seeing
                   setDebugOcrText(data.text.replace(/\n/g, " ").trim().substring(0, 150));
@@ -156,9 +186,6 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                   
                   if (code) {
                     setScannedCode(code);
-                    
-                    // We don't need bounding boxes anymore since we removed the crop math.
-                    // The reticle simply turns green.
                   }
                 } catch (e) {
                   console.error("OCR Error:", e);
@@ -312,8 +339,11 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
         {/* Debug Canvas: Shows exactly what Tesseract is seeing */}
         {!isManualMode && (
           <div className="absolute top-20 left-4 z-20 flex flex-col gap-1 pointer-events-none opacity-80">
-            <span className="text-[9px] text-white uppercase tracking-widest font-mono">Scanner-Fokus:</span>
+            <span className="text-[9px] text-white uppercase tracking-widest font-mono">Kamera-Feed:</span>
             <canvas id="debug-canvas" className="w-16 h-24 border border-indigo-500/50 rounded-lg bg-black shadow-2xl object-cover" />
+            
+            <span className="text-[9px] text-white uppercase tracking-widest font-mono mt-1">KI-Filter:</span>
+            <canvas id="bw-canvas" className="w-16 h-16 border border-emerald-500/50 rounded-lg bg-black shadow-2xl object-cover" />
           </div>
         )}
         
