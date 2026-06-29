@@ -5,6 +5,7 @@ import TradeCenter from "./components/TradeCenter";
 import StatsDashboard from "./components/StatsDashboard";
 import NationsProgressTable from "./components/NationsProgressTable";
 import NotificationTray from "./components/NotificationTray";
+import StickerScanner from "./components/StickerScanner";
 import NotificationBotCenter from "./components/NotificationBotCenter";
 import LoginScreen from "./components/LoginScreen";
 import ProfileView from "./components/ProfileView";
@@ -24,7 +25,8 @@ import {
   TrendingUp,
   Table,
   MessageSquare,
-  User
+  User,
+  Camera
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -49,6 +51,7 @@ export default function App() {
     return loggedInId === "undefined" ? "" : loggedInId;
   });
   const [activeTab, setActiveTab] = useState<"album" | "nations" | "group" | "profile">("album");
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [selectedCountryKey, setSelectedCountryKey] = useState<string>("GER");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [globalError, setGlobalError] = useState<string | null>(null);
@@ -529,6 +532,13 @@ export default function App() {
 
           {/* Core Settings triggers */}
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsScannerOpen(true)}
+              className="relative p-2 rounded-xl transition-all cursor-pointer bg-slate-950 border border-slate-800 text-slate-400 hover:text-indigo-400 hover:border-indigo-500/50"
+              title="Sticker Scanner öffnen"
+            >
+              <Camera className="h-5 w-5" />
+            </button>
             <NotificationTray
               profiles={profiles}
               onExecuteTrade={handleExecuteTrade}
@@ -715,6 +725,15 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Scanner Overlay */}
+      {isScannerOpen && activeProfile && (
+        <StickerScanner
+          profile={activeProfile}
+          onUpdateInventory={handleUpdateInventory}
+          onClose={() => setIsScannerOpen(false)}
+        />
+      )}
     </div>
   );
 }
