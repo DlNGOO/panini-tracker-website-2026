@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import zlib from "zlib";
 import { fileURLToPath } from "url";
 
 // CRITICAL FIX: Bypass strict TLS checks to allow JSONBin node-fetch to work reliably on Windows/certain Node environments
@@ -75,14 +76,17 @@ async function startServer() {
     if (cloudSyncEnabled && process.env.JSONBIN_BIN_ID && process.env.JSONBIN_API_KEY) {
       const syncCloud = async () => {
         try {
-          const res = await fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Master-Key': process.env.JSONBIN_API_KEY!
-            },
-            body: JSON.stringify(memoryDb)
-          });
+            const jsonString = JSON.stringify(memoryDb);
+            const compressed = zlib.gzipSync(Buffer.from(jsonString, 'utf-8')).toString('base64');
+            
+            const res = await fetch(`https://api.jsonbin.io/v3/b/${process.env.JSONBIN_BIN_ID}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': process.env.JSONBIN_API_KEY!
+              },
+              body: JSON.stringify({ _zlib_base64: compressed })
+            });
           if (!res.ok) {
             const errBody = await res.text();
             console.error(`Cloud DB sync failed with HTTP status: ${res.status}. Response: ${errBody}`);
@@ -114,7 +118,18 @@ async function startServer() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data && data.record) {
-        const cloudDb = data.record;
+        let cloudDb = data.record;
+        
+        // Decompress if it's zlib compressed
+        if (cloudDb._zlib_base64) {
+          try {
+            const decompressed = zlib.gunzipSync(Buffer.from(cloudDb._zlib_base64, 'base64')).toString('utf-8');
+            cloudDb = JSON.parse(decompressed);
+          } catch (e) {
+            console.error("Failed to decompress cloud DB:", e);
+          }
+        }
+        
         let localDb: any = null;
         
         if (fs.existsSync(dbPath)) {
