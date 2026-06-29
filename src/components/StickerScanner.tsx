@@ -12,7 +12,6 @@ interface StickerScannerProps {
 }
 
 export default function StickerScanner({ onClose, profile, onUpdateInventory }: StickerScannerProps) {
-  // File input ref — triggers native OS camera (guaranteed to work on iOS + Android)
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const workerRef     = useRef<Tesseract.Worker | null>(null);
 
@@ -20,7 +19,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
   const [status, setStatus] = useState<'idle'|'scanning'|'done'|'error'>('idle');
   const [capturedUrl, setCapturedUrl] = useState<string | null>(null);
   const [scannedCode, setScannedCode] = useState<string | null>(null);
-  const [ocrPreview, setOcrPreview]   = useState('');  // what OCR actually read
+  const [ocrPreview, setOcrPreview]   = useState('');
   const [isManualMode, setIsManualMode] = useState(false);
   const [manualCode, setManualCode]   = useState('');
   const [manualError, setManualError] = useState('');
@@ -28,10 +27,8 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
 
   const allKnownCodes = getAllStickerCodes().sort((a, b) => b.length - a.length);
 
-  // ── Code extraction: pattern-first, then fallback ──────────────────────
   const extractCode = (text: string): string | null => {
     const upper = text.toUpperCase().replace(/[^A-Z0-9\n ]/g, ' ');
-    // Primary: look for [2-4 letters][optional space][1-2 digits] patterns
     const patternRegex = /\b([A-Z]{2,4})\s*(\d{1,2})\b/g;
     const candidates: string[] = [];
     let m: RegExpExecArray | null;
@@ -44,7 +41,6 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
         if (code.toUpperCase().replace(/\s/g, '') === compact) return code;
       }
     }
-    // Fallback: exact token matching
     const tokens = upper.split(/\s+/).filter(t => t.length > 0);
     for (const code of allKnownCodes) {
       const c = code.toUpperCase().replace(/\s/g, '');
@@ -56,7 +52,6 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
     return null;
   };
 
-  // ── Pre-load Tesseract worker ───────────────────────────────────────────
   useEffect(() => {
     let alive = true;
     const init = async () => {
@@ -74,12 +69,10 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
     return () => { alive = false; workerRef.current?.terminate(); };
   }, []);
 
-  // ── Handle photo taken via file input ──────────────────────────────────
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !workerRef.current) return;
 
-    // Show preview immediately
     const url = URL.createObjectURL(file);
     setCapturedUrl(url);
     setStatus('scanning');
@@ -87,31 +80,35 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
     setScannedCode(null);
 
     try {
-      // Crop top-right 50% x top-40% from the image before OCR
       const img = new Image();
       img.src = url;
-      await new Promise<void>((res, rej) => {
-        img.onload = () => res();
-        img.onerror = rej;
-      });
+      await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; });
 
-      const cropCanvas = document.createElement('canvas');
-      const cropX = Math.round(img.naturalWidth  * 0.50);
-      const cropY = 0;
-      const cropW = Math.round(img.naturalWidth  * 0.50);
-      const cropH = Math.round(img.naturalHeight * 0.45);
-      // Upscale 2x for better OCR
-      cropCanvas.width  = cropW * 2;
-      cropCanvas.height = cropH * 2;
-      const ctx = cropCanvas.getContext('2d')!;
-      ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropCanvas.width, cropCanvas.height);
+      // NO CROPPING (to avoid EXIF rotation issues on iOS).
+      // Instead, we scale down the whole image to max 1200px and apply a high-contrast B&W filter
+      // so Tesseract can easily read the bright text on the dark sticker background.
+      const maxDim = 1200;
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+        else { w = Math.round((w * maxDim) / h); h = maxDim; }
+      }
 
-      // Convert cropped canvas to blob and pass to Tesseract
-      const blob = await new Promise<Blob>((res) => cropCanvas.toBlob(b => res(b!), 'image/jpeg', 0.95));
+      const processCanvas = document.createElement('canvas');
+      processCanvas.width = w;
+      processCanvas.height = h;
+      const ctx = processCanvas.getContext('2d')!;
+      
+      // High contrast and grayscale to make text pop
+      ctx.filter = 'grayscale(100%) contrast(250%) brightness(120%)';
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const blob = await new Promise<Blob>((res) => processCanvas.toBlob(b => res(b!), 'image/jpeg', 0.95));
       const { data } = await workerRef.current.recognize(blob);
 
       const rawText = data.text.replace(/\n/g, ' ').trim();
-      setOcrPreview(rawText.substring(0, 80));
+      setOcrPreview(rawText.substring(0, 100));
 
       const code = extractCode(data.text);
       if (code) {
@@ -124,7 +121,6 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
       setStatus('error');
     }
 
-    // Reset file input so same photo can be retaken
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -159,12 +155,9 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col overflow-y-auto">
-
-      {/* Native camera input — the ONLY reliable way on iOS + Android */}
       <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
         onChange={handleFileChange} className="hidden" />
 
-      {/* Header */}
       <div className="sticky top-0 flex items-center justify-between px-4 py-3 bg-slate-950/90 backdrop-blur-sm border-b border-white/5 z-10">
         <span className="text-white font-bold text-base">Sticker scannen</span>
         <button onClick={onClose} className="p-2 rounded-full bg-white/10 text-white"><X className="w-4 h-4" /></button>
@@ -172,35 +165,29 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
 
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-5 py-8">
         <AnimatePresence mode="wait">
-
-          {/* ── IDLE ── */}
           {status === 'idle' && !isManualMode && (
             <motion.div key="idle"
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
               className="flex flex-col items-center gap-6 w-full max-w-xs">
 
-              {/* Guide illustration */}
               <div className="relative w-56 h-36 rounded-2xl border-2 border-dashed border-indigo-500/40 bg-white/5 flex items-center justify-center overflow-hidden">
                 <span className="text-white/20 text-xs uppercase tracking-widest">Sticker</span>
-                {/* Top-right code zone */}
                 <div className="absolute top-2 right-2 border-2 border-indigo-400 rounded-lg px-1.5 py-0.5 animate-pulse">
                   <span className="text-indigo-300 text-[11px] font-mono font-bold">SUI 1</span>
                 </div>
                 <div className="absolute bottom-2 left-0 right-0 text-center">
-                  <span className="text-[9px] text-white/30 uppercase tracking-widest">Code oben rechts scannen</span>
+                  <span className="text-[9px] text-white/30 uppercase tracking-widest">Gut beleuchtet fotografieren</span>
                 </div>
               </div>
 
               <p className="text-white/50 text-sm text-center leading-relaxed">
-                Halte die Kamera nah an den <strong className="text-indigo-400">Code oben rechts</strong> auf dem Sticker.
-                Das System scannt <strong className="text-white/70">nur diese Ecke</strong>.
+                Mache ein <strong className="text-indigo-400">scharfes Foto</strong> vom gesamten Sticker.
+                Das System sucht automatisch nach dem Code.
               </p>
 
               <p className="text-[11px] font-mono text-white/25">{workerReady ? 'Bereit' : 'Laedt...'}</p>
 
-              {/* BIG shutter button */}
-              <button id="shutter-btn"
-                onClick={() => fileInputRef.current?.click()}
+              <button onClick={() => fileInputRef.current?.click()}
                 disabled={!workerReady}
                 className="w-24 h-24 rounded-full border-4 border-white/80 bg-white/10 flex items-center justify-center transition-all active:scale-90 disabled:opacity-30 shadow-2xl shadow-indigo-900/40">
                 <Camera className="w-10 h-10 text-white" />
@@ -214,7 +201,6 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
             </motion.div>
           )}
 
-          {/* ── SCANNING ── */}
           {status === 'scanning' && capturedUrl && (
             <motion.div key="scanning"
               initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
@@ -224,16 +210,13 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                   <div className="bg-black/80 rounded-xl px-5 py-4 text-center">
                     <div className="w-7 h-7 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                    <p className="text-white text-sm">Analysiere Code-Ecke...</p>
+                    <p className="text-white text-sm">Analysiere Foto...</p>
                   </div>
                 </div>
-                {/* Highlight the area being scanned */}
-                <div className="absolute top-0 right-0 w-1/2 h-2/5 border-2 border-indigo-400/60 pointer-events-none" />
               </div>
             </motion.div>
           )}
 
-          {/* ── ERROR ── */}
           {status === 'error' && (
             <motion.div key="error"
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
@@ -241,7 +224,6 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
               {capturedUrl && (
                 <div className="relative w-full rounded-2xl overflow-hidden border border-red-500/30">
                   <img src={capturedUrl} alt="Foto" className="w-full object-cover opacity-60" />
-                  <div className="absolute top-0 right-0 w-1/2 h-2/5 border-2 border-red-400/60 pointer-events-none" />
                 </div>
               )}
               <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-4 text-center w-full">
@@ -249,7 +231,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                 {ocrPreview ? (
                   <p className="text-red-300/70 text-xs">Gelesen: &quot;{ocrPreview}&quot;</p>
                 ) : (
-                  <p className="text-red-300/70 text-xs">Naher ranhalten oder schärfer fokussieren</p>
+                  <p className="text-red-300/70 text-xs">Bitte schärfer fotografieren oder manuell eingeben.</p>
                 )}
               </div>
               <div className="flex flex-col gap-3 w-full">
@@ -267,7 +249,6 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
             </motion.div>
           )}
 
-          {/* ── SUCCESS ── */}
           {status === 'done' && scannedCode && (
             <motion.div key="done"
               initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
@@ -275,7 +256,6 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
               {capturedUrl && (
                 <div className="relative w-full rounded-2xl overflow-hidden border-2 border-emerald-500/50">
                   <img src={capturedUrl} alt="Foto" className="w-full object-cover" />
-                  <div className="absolute top-0 right-0 w-1/2 h-2/5 border-2 border-emerald-400 pointer-events-none" />
                 </div>
               )}
               {successMsg ? (
@@ -312,7 +292,6 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
             </motion.div>
           )}
 
-          {/* ── MANUAL ── */}
           {isManualMode && (
             <motion.div key="manual"
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
