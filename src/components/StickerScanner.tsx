@@ -28,10 +28,13 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
   const [manualCode, setManualCode] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [ocrStatus, setOcrStatus] = useState<string>("Initialisiere...");
+  const [ocrStatus, setOcrStatus] = useState<string>("Kamera startet...");
+  
+  // Track if scanner is active for requestAnimationFrame
+  const isScanningRef = useRef(false);
 
-  // Stop media tracks when component unmounts
   const stopMediaTracks = () => {
+    isScanningRef.current = false;
     if (videoRef.current && videoRef.current.srcObject) {
       const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach((track) => track.stop());
@@ -39,6 +42,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
   };
 
   useEffect(() => {
+    isScanningRef.current = true;
     let worker: Tesseract.Worker | null = null;
     let scanInterval: ReturnType<typeof setInterval>;
     
@@ -83,18 +87,33 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
             if (videoRef.current) {
               videoRef.current.play();
               setIsLoading(false);
+              setOcrStatus("Lade KI-Modell...");
               
-              // Init Tesseract with logger to track progress
+              // Start debug canvas loop independent of Tesseract
+              const drawDebug = () => {
+                 if (!isScanningRef.current) return;
+                 const debugCanvas = document.getElementById("debug-canvas") as HTMLCanvasElement;
+                 if (debugCanvas && videoRef.current && videoRef.current.readyState === 4) {
+                    debugCanvas.width = 100;
+                    debugCanvas.height = 150;
+                    const debugCtx = debugCanvas.getContext("2d");
+                    if (debugCtx) debugCtx.drawImage(videoRef.current, 0, 0, 100, 150);
+                 }
+                 requestAnimationFrame(drawDebug);
+              };
+              drawDebug();
+              
+              // Init Tesseract with logger to track progress and use fast model
               worker = await createWorker('eng', 1, {
+                langPath: 'https://tessdata.projectnaptha.com/4.0.0_fast',
                 logger: m => {
                   if (m.status === "recognizing text") {
                     setOcrStatus(`Analysiere... ${Math.round(m.progress * 100)}%`);
                   } else {
-                    // Translate common Tesseract statuses to German
                     let statusDe = m.status;
-                    if (m.status.includes("loading")) statusDe = "Lade Scanner-Engine...";
+                    if (m.status.includes("loading")) statusDe = "Lade Sprachmodell...";
                     if (m.status.includes("initializing")) statusDe = "Starte Scanner...";
-                    if (m.status.includes("downloading")) statusDe = "Lade Sprachmodell...";
+                    if (m.status.includes("downloading")) statusDe = "Lade Daten...";
                     setOcrStatus(statusDe);
                   }
                 }
@@ -120,17 +139,6 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                 const ctx = canvas.getContext("2d");
                 if (!ctx) return;
                 ctx.drawImage(video, 0, 0, w, h);
-
-                // Show the FULL image in the debug canvas (scaled down) to guarantee we see if drawing works
-                const debugCanvas = document.getElementById("debug-canvas") as HTMLCanvasElement;
-                if (debugCanvas) {
-                   debugCanvas.width = 100;
-                   debugCanvas.height = 150;
-                   const debugCtx = debugCanvas.getContext("2d");
-                   if (debugCtx) {
-                      debugCtx.drawImage(canvas, 0, 0, 100, 150);
-                   }
-                }
                 
                 // Do OCR on the ENTIRE frame using SPARSE_TEXT (finds text anywhere)
                 try {
