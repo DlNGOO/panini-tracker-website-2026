@@ -86,8 +86,7 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
               // Init Tesseract
               worker = await createWorker('eng');
               await worker.setParameters({
-                tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK,
-                tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 '
+                tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT
               });
               
               // Start interval scanning
@@ -99,66 +98,71 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
                 if (!video || !canvas) return;
 
                 // Crop the video to the reticle area for better and faster OCR
-                // Reticle size: w-56 h-72 = 14rem x 18rem = 224px x 288px
+                // Ensure we have valid video dimensions
+                const vw = video.videoWidth;
+                const vh = video.videoHeight;
+                if (!vw || !vh) return;
+
+                // Draw FULL video to the hidden canvas (fixes iOS issues with scaled cropping)
+                canvas.width = vw;
+                canvas.height = vh;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) return;
+                ctx.drawImage(video, 0, 0, vw, vh);
+
+                // Calculate the reticle area in video coordinates
                 const reticleClientW = 224;
                 const reticleClientH = 288;
                 
-                // Account for object-cover scaling
-                const scale = Math.max(video.clientWidth / video.videoWidth, video.clientHeight / video.videoHeight);
+                const scale = Math.max(video.clientWidth / vw, video.clientHeight / vh);
+                const displayW = vw * scale;
+                const displayH = vh * scale;
                 
-                // Displayed size of the video (some parts might bleed off-screen)
-                const displayW = video.videoWidth * scale;
-                const displayH = video.videoHeight * scale;
-                
-                // Offset of the video relative to the container
                 const offsetX = (video.clientWidth - displayW) / 2;
                 const offsetY = (video.clientHeight - displayH) / 2;
                 
-                // Reticle is centered in the container
                 const reticleX = (video.clientWidth - reticleClientW) / 2;
                 const reticleY = (video.clientHeight - reticleClientH) / 2;
                 
-                // Map reticle coordinates back to the original video coordinates
-                const reticleVideoX = (reticleX - offsetX) / scale;
-                const reticleVideoY = (reticleY - offsetY) / scale;
-                const reticleVideoW = reticleClientW / scale;
-                const reticleVideoH = reticleClientH / scale;
-                
-                // Scale up the cropped area to improve OCR of small text (2x)
-                const scaleForOCR = 2;
-                canvas.width = reticleVideoW * scaleForOCR;
-                canvas.height = reticleVideoH * scaleForOCR;
-                
-                const ctx = canvas.getContext("2d");
-                if (!ctx) return;
-                
-                ctx.drawImage(
-                  video,
-                  reticleVideoX, reticleVideoY, reticleVideoW, reticleVideoH,
-                  0, 0, canvas.width, canvas.height
-                );
+                // Keep within bounds
+                const reticleVideoX = Math.max(0, (reticleX - offsetX) / scale);
+                const reticleVideoY = Math.max(0, (reticleY - offsetY) / scale);
+                const reticleVideoW = Math.min(vw - reticleVideoX, reticleClientW / scale);
+                const reticleVideoH = Math.min(vh - reticleVideoY, reticleClientH / scale);
                 
                 // Show the cropped image in the debug canvas
                 const debugCanvas = document.getElementById("debug-canvas") as HTMLCanvasElement;
                 if (debugCanvas) {
-                   debugCanvas.width = canvas.width;
-                   debugCanvas.height = canvas.height;
+                   debugCanvas.width = reticleVideoW;
+                   debugCanvas.height = reticleVideoH;
                    const debugCtx = debugCanvas.getContext("2d");
-                   if (debugCtx) debugCtx.drawImage(canvas, 0, 0);
+                   if (debugCtx) {
+                      debugCtx.drawImage(
+                        canvas, 
+                        reticleVideoX, reticleVideoY, reticleVideoW, reticleVideoH, 
+                        0, 0, reticleVideoW, reticleVideoH
+                      );
+                   }
                 }
                 
-                // Do OCR on the cropped and magnified canvas
+                // Do OCR on the specific rectangle
                 try {
                   setIsRecognizing(true);
-                  // Force a short timeout for OCR so it doesn't hang forever
-                  const { data } = await worker!.recognize(canvas);
+                  const { data } = await worker!.recognize(canvas, {
+                    rectangle: {
+                      top: reticleVideoY,
+                      left: reticleVideoX,
+                      width: reticleVideoW,
+                      height: reticleVideoH
+                    }
+                  });
                   
                   // Look for valid codes in the text
                   const code = extractStickerCode(data.text);
                   
                   if (code) {
                     setScannedCode(code);
-                    setCropData({ x: reticleVideoX, y: reticleVideoY, scale: scaleForOCR });
+                    setCropData({ x: reticleVideoX, y: reticleVideoY, scale: 1 });
                     
                     // Find bounding box for drawing overlay
                     let boxFound = false;
@@ -297,8 +301,8 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
 
   return (
     <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
-      {/* Hidden canvas for OCR processing */}
-      <canvas ref={canvasRef} className="hidden" />
+      {/* Hidden canvas for OCR processing (using opacity-0 instead of hidden for iOS support) */}
+      <canvas ref={canvasRef} className="absolute opacity-0 pointer-events-none" />
       
       {/* Header */}
       <div className="absolute top-0 inset-x-0 p-4 flex items-center justify-between z-20 bg-gradient-to-b from-black/80 to-transparent">
@@ -381,9 +385,9 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
 
         {/* Debug Canvas: Shows exactly what Tesseract is seeing */}
         {!isManualMode && (
-          <div className="absolute top-20 left-4 z-20 flex flex-col gap-1 pointer-events-none opacity-60">
-            <span className="text-[9px] text-white/50 uppercase tracking-widest font-mono">Scanner-Auge:</span>
-            <canvas id="debug-canvas" className="w-24 border border-white/20 rounded bg-black/50" />
+          <div className="absolute top-20 left-4 z-20 flex flex-col gap-1 pointer-events-none opacity-80">
+            <span className="text-[9px] text-white uppercase tracking-widest font-mono">Scanner-Auge:</span>
+            <canvas id="debug-canvas" className="w-32 border border-indigo-500/50 rounded-lg bg-black shadow-2xl" />
           </div>
         )}
 
