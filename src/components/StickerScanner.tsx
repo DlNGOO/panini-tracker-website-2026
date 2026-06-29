@@ -21,8 +21,6 @@ export default function StickerScanner({ onClose, profile, onUpdateInventory }: 
   const [scannedCode, setScannedCode] = useState<string | null>(null);
   const [scannedBox, setScannedBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   
-  const [scannedBox, setScannedBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
-  
   // Store crop coordinates for bounding box calculation
   const [cropData, setCropData] = useState<{ x: number; y: number; scale: number } | null>(null);
 
